@@ -13,7 +13,7 @@ const p = await ctx.newPage();
 p.on('pageerror', (e) => errors.push(String(e)));
 p.on('console', (m) => m.type() === 'error' && !/Failed to load resource|net::ERR|telegram/i.test(m.text()) && errors.push(m.text()));
 const shot = (n) => p.screenshot({ path: `shots/${n}.png` });
-const step = async (name, fn) => { try { await fn(); } catch (e) { errors.push(`${name}: ${e.message.split('\n')[0]}`); await shot('fail-' + name).catch(() => {}); } };
+const step = async (name, fn) => { try { await fn(); } catch (e) { errors.push(`${name}: ${e.message.split('\n').slice(0, 4).join(' / ')}`); await shot('fail-' + name).catch(() => {}); } };
 
 await p.goto('http://localhost:8099/');
 await p.waitForSelector('.onb h1');
