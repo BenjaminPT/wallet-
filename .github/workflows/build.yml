@@ -36,7 +36,10 @@ jobs:
         run: npm audit signatures
         continue-on-error: true
       - name: Известные уязвимости зависимостей (production)
-        run: npm audit --omit=dev --audit-level=high
+        run: |
+          npm audit --omit=dev --audit-level=high > audit.log 2>&1; code=$?
+          grep -E "Severity|^[a-z@].* +[<>=*]|vulnerabilit|Fix available|node_modules" audit.log | head -25 | while IFS= read -r l; do echo "::notice title=audit::$(echo "$l" | cut -c1-250)"; done
+          exit $code
         continue-on-error: true
       - run: npx playwright install --with-deps chromium
       - run: node test/icons.mjs
