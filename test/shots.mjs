@@ -70,8 +70,8 @@ await step('accounts', async () => {
   for (let i = 0; i < 3; i++) await inputs.nth(i).fill(words[nums[i] - 1]);
   await p.click('.btn.primary'); await p.waitForSelector('.home .big', { timeout: 15000 });
   await p.locator('.tabbar button').nth(3).click(); await p.waitForTimeout(500); await shot('16-settings-accounts');
-  await p.click('text=Выйти из аккаунта'); await p.waitForSelector('.home .big', { timeout: 15000 }); // вернулись в первый, всё ещё открытый
-  await p.locator('.tabbar button').nth(3).click(); await p.click('text=Заблокировать'); await p.waitForSelector('input[type=password]'); await shot('17-locked');
+  await p.click('text=Выйти из аккаунта'); await p.waitForSelector('.set-tab', { timeout: 15000 }); // вернулись в первый, всё ещё открытый
+  await p.click('text=Заблокировать'); await p.waitForSelector('input[type=password]'); await shot('17-locked');
   await p.click('text=Сменить аккаунт'); await p.waitForSelector('.row.acc'); await shot('18-accounts');
   if ((await p.locator('.row.acc').count()) !== 2) throw new Error('ожидалось 2 аккаунта');
   await p.locator('.row.acc').nth(0).click(); await p.fill('input[type=password]', 'testpass123'); await p.click('.btn.primary'); await p.waitForSelector('.home .big', { timeout: 15000 });
