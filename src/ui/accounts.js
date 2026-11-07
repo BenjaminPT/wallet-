@@ -29,7 +29,7 @@ export function AccountsSheet({ onClose }) {
       <div class="center"><${Avatar} a=${a} s=${64}/></div>
       <input class="field glass" maxlength="24" value=${a.name} aria-label=${t('renamePrompt')} onInput=${(e) => { renameAccount(a.id, e.target.value || a.name); }} onBlur=${() => force((n) => n + 1)}/>
       <div class="dim small">${t('colorTag')}</div>
-      <div class="swatches">${COLORS.map((c, i) => html`<button class=${a.color === i ? 'sw on' : 'sw'} style=${`background:${c}`} aria-label=${`${t('colorTag')} ${i + 1}`} aria-pressed=${a.color === i} onClick=${() => { haptic(6); setAccountColor(a.id, i); force((n) => n + 1); }}/>`)}</div>
+      <div class="swatches">${COLORS.map((c, i) => html`<button class=${a.color === i ? 'cswatch on' : 'cswatch'} style=${`background:${c}`} aria-label=${`${t('colorTag')} ${i + 1}`} aria-pressed=${a.color === i} onClick=${() => { haptic(6); setAccountColor(a.id, i); force((n) => n + 1); }}/>`)}</div>
       <${Btn} onClick=${() => setView('list')}>${t('done')}<//><//>`;
   }
 

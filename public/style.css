@@ -173,9 +173,9 @@ body.sheet-open .tabbar{transform:translateY(140%);opacity:0;pointer-events:none
 .row.acc{align-items:center;gap:6px}
 .acc-main{display:flex;align-items:center;gap:12px;flex:1;min-width:0;text-align:left;color:inherit;background:none;border:0;padding:0;cursor:pointer;font:inherit}
 .swatches{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;padding:6px 0}
-.sw{width:36px;height:36px;border-radius:50%;border:2px solid transparent;cursor:pointer;transition:transform .18s cubic-bezier(.2,.8,.2,1)}
-.sw.on{border-color:#fff;transform:scale(1.12)}
+.cswatch{width:36px;height:36px;border-radius:50%;border:2px solid transparent;cursor:pointer;transition:transform .18s cubic-bezier(.2,.8,.2,1)}
+.cswatch.on{border-color:#fff;transform:scale(1.12)}
 .beta{display:inline-block;margin-left:10px;padding:3px 9px;border-radius:999px;border:1px solid var(--bd);font-size:11px;font-weight:600;letter-spacing:.4px;vertical-align:middle;color:var(--dim)}
 .beta-note{margin:-4px 0 6px}
 .mark{display:block}
-@media (prefers-reduced-motion:reduce){.acc-btn,.sw{transition:none}}
+@media (prefers-reduced-motion:reduce){.acc-btn,.cswatch{transition:none}}

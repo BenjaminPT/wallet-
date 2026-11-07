@@ -43,7 +43,7 @@ await step('mainname', async () => {
   await p.click('.acc-btn'); await p.waitForSelector('.sheet'); await shot('05-accounts-sheet');
   if (!(await p.textContent('.sheet')).includes('Основной аккаунт')) throw new Error('первый аккаунт должен называться «Основной аккаунт»');
   await p.click('.sheet .alist .icon-btn >> nth=0'); await p.waitForSelector('.swatches');
-  await p.fill('.sheet input.field', 'Личный'); await p.click('.sw >> nth=5'); await shot('06-edit-account');
+  await p.fill('.sheet input.field', 'Личный'); await p.click('.cswatch >> nth=5'); await shot('06-edit-account');
   await p.click('.sheet .btn.primary'); await p.waitForTimeout(300);
   if (!(await p.textContent('.sheet')).includes('Личный')) throw new Error('переименование не сохранилось');
   await p.click('.sheet-h .icon-btn');
