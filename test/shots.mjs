@@ -41,7 +41,7 @@ await step('tabs', async () => {
   for (const [i, n] of [[1, 'market'], [2, 'nft'], [3, 'settings']]) { await tabs.nth(i).click(); await p.waitForTimeout(700); await shot(`12-${n}`); }
 });
 await step('create', async () => {
-  await p.locator('.seg button').nth(1).click();
+  await p.locator('.set-tab > .seg2 button').nth(1).click();
   await p.waitForSelector('.field');
   const pw = p.locator('input[type=password]'); await pw.nth(0).fill('testpass123'); await pw.nth(1).fill('testpass123');
   await p.click('.btn.primary'); await p.waitForSelector('.seed'); await p.click('.seed');

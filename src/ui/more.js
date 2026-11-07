@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { html, Icon, Coin, Screen, Btn, Sheet, fmtFiat, fmtNum, short, pct, copyText } from './common.js';
+import { html, Icon, Coin, Screen, Btn, Sheet, fmtFiat, fmtNum, short, pct, copyText, haptic } from './common.js';
 import { t } from '../i18n.js';
 import { state, push, pop, assets, balanceOf, priceOf, isDemo, currentKeys, toast, setSettings, refresh, lock, resetWallet, resetTo, enterDemo, addrFor } from '../store.js';
 import { netOf, assetId, tag, label } from '../core/assets.js';
 import { explorerTx } from '../core/chains.js';
 import { lifiQuote, lifiExecute, jupQuote, jupExecute, lidoStake, lidoApr, getMarket } from '../core/market.js';
-import { hasVault, unlockVault } from '../core/vault.js';
+import { hasVault, unlockVault, saveVault } from '../core/vault.js';
 
 // ---------------- ОБМЕН ----------------
 // Маршруты: Solana↔Solana — Jupiter; EVM↔EVM, EVM↔Tron — LI.FI (в Tron из Tron нельзя). Остальное не поддерживается.
@@ -155,31 +155,73 @@ export function MarketTab() {
 }
 
 // ---------------- НАСТРОЙКИ ----------------
+const Seg = ({ value, options, onChange }) => {
+  const i = Math.max(0, options.findIndex((o) => o[0] === value));
+  return html`<div class="seg2" role="radiogroup" style=${`--n:${options.length};--i:${i}`}><i class="thumb"/>${options.map(([v, label]) => html`<button role="radio" aria-checked=${v === value} class=${v === value ? 'on' : ''} onClick=${() => { haptic(6); onChange(v); }}>${label}</button>`)}</div>`;
+};
+const Switch = ({ on, onChange, label }) => html`<button class=${on ? 'sw on' : 'sw'} role="switch" aria-checked=${on} aria-label=${label} onClick=${() => { haptic(6); onChange(!on); }}><i/></button>`;
+const Group = ({ title, children }) => html`<section class="grp"><h4>${title}</h4><div class="grp-b glass">${children}</div></section>`;
+const SRow = ({ ic, label, hint, right, onClick, danger }) => {
+  const Tag = onClick ? 'button' : 'div';
+  return html`<${Tag} class=${`srow${danger ? ' danger' : ''}`} onClick=${onClick}><span class="sic"><${Icon} n=${ic} s=${18}/></span><span class="grow-l"><b>${label}</b>${hint && html`<span class="dim small">${hint}</span>`}</span>${right}${onClick && !right && html`<span class="dim"><${Icon} n="chev" s=${16}/></span>`}<//>`;
+};
+
 export function SettingsTab() {
   const s = state.s;
   const [sheet, setSheet] = useState(null);
   const goReal = () => (hasVault() ? resetTo('unlock') : push('setPass', { mode: 'create' }));
-  const Row = ({ ic, label, value, onClick }) => html`<button class="row glass set" onClick=${onClick}><${Icon} n=${ic} s=${20}/><span class="grow-l"><b>${label}</b></span><span class="dim">${value}</span></button>`;
-  return html`<div class="tab"><h2>${t('settings')}</h2>
-    <div class="seg glass"><button class=${s.mode === 'demo' ? 'on' : ''} onClick=${enterDemo}>${t('modeDemo')}</button><button class=${s.mode === 'real' ? 'on' : ''} onClick=${() => s.mode !== 'real' && goReal()}>${t('modeReal')}</button></div>
-    <div class="list">
-      <${Row} ic="globe" label=${t('language')} value=${s.lang === 'ru' ? 'Русский' : 'English'} onClick=${() => setSettings({ lang: s.lang === 'ru' ? 'en' : 'ru' })}/>
-      <${Row} ic="market" label=${t('currency')} value=${s.fiat.toUpperCase()} onClick=${() => setSettings({ fiat: { usd: 'eur', eur: 'rub', rub: 'usd' }[s.fiat] })}/>
-      <${Row} ic="lock" label=${t('autolock')} value=${s.autolock ? `${s.autolock} ${t('min')}` : '0'} onClick=${() => setSettings({ autolock: { 1: 5, 5: 15, 15: 0, 0: 1 }[s.autolock] })}/>
-      <${Row} ic="swap" label=${t('testnets')} value=${s.testnets ? 'ON' : 'OFF'} onClick=${() => setSettings({ testnets: !s.testnets })}/>
-      <${Row} ic="user" label=${t('addrBook')} value=${s.book.length} onClick=${() => setSheet('book')}/>
-      <${Row} ic="plus" label=${t('customTokens')} value=${s.custom.length} onClick=${() => setSheet('token')}/>
-      <${Row} ic="nft" label=${t('alchemyKey')} value=${s.alchemy ? '•••' : ''} onClick=${() => setSheet('alchemy')}/>
-      ${s.mode === 'real' && html`<${Row} ic="key" label=${t('showSeed')} value="" onClick=${() => setSheet('seed')}/><${Row} ic="lock" label=${t('lock')} value="" onClick=${lock}/>`}
-      ${hasVault() && html`<${Row} ic="close" label=${t('resetWallet')} value="" onClick=${() => { if (confirm(t('resetWarn'))) resetWallet(); }}/>`}
+  const real = s.mode === 'real' && state.addrs;
+  const addr = real ? state.addrs.evm : null;
+  return html`<div class="tab set-tab"><h2>${t('settings')}</h2>
+    <div class="prof glass">
+      <div class="prof-av">${real ? html`<${Icon} n="lock" s=${22}/>` : html`<${Icon} n="eye" s=${22}/>`}</div>
+      <div class="grow-l"><b>${real ? 'Noir Wallet' : t('modeDemo')}</b><span class="dim small mono">${real ? short(addr) : t('needRealWallet')}</span></div>
+      ${real && html`<button class="icon-btn" aria-label=${t('copy')} onClick=${async () => { await copyText(addr); toast(t('copied')); }}><${Icon} n="copy" s=${18}/></button>`}
     </div>
-    <p class="dim small">${t('aboutText')}</p><div style="height:110px"/>
+    <${Seg} value=${s.mode} options=${[['demo', t('modeDemo')], ['real', t('modeReal')]]} onChange=${(v) => (v === 'demo' ? enterDemo() : s.mode !== 'real' && goReal())}/>
+
+    <${Group} title=${t('secGeneral')}>
+      <${SRow} ic="globe" label=${t('language')} right=${html`<${Seg} value=${s.lang} options=${[['ru', 'RU'], ['en', 'EN']]} onChange=${(v) => setSettings({ lang: v })}/>`}/>
+      <${SRow} ic="market" label=${t('currency')} right=${html`<${Seg} value=${s.fiat} options=${[['usd', 'USD'], ['eur', 'EUR'], ['rub', 'RUB']]} onChange=${(v) => setSettings({ fiat: v })}/>`}/>
+      <${SRow} ic="swap" label=${t('testnets')} right=${html`<${Switch} on=${s.testnets} label=${t('testnets')} onChange=${(v) => setSettings({ testnets: v })}/>`}/>
+    <//>
+
+    <${Group} title=${t('secSecurity')}>
+      <${SRow} ic="lock" label=${t('autolock')} hint=${s.mode !== 'real' ? t('realOnly') : null} right=${html`<${Seg} value=${s.autolock} options=${[[1, '1'], [5, '5'], [15, '15'], [0, '∞']]} onChange=${(v) => setSettings({ autolock: v })}/>`}/>
+      ${s.mode === 'real' && html`<${SRow} ic="key" label=${t('showSeed')} onClick=${() => setSheet('seed')}/><${SRow} ic="lock" label=${t('changePass')} onClick=${() => setSheet('pass')}/><${SRow} ic="close" label=${t('lock')} onClick=${lock}/>`}
+    <//>
+
+    <${Group} title=${t('secData')}>
+      <${SRow} ic="user" label=${t('addrBook')} right=${html`<span class="dim">${s.book.length}</span>`} onClick=${() => setSheet('book')}/>
+      <${SRow} ic="plus" label=${t('customTokens')} right=${html`<span class="dim">${s.custom.length}</span>`} onClick=${() => setSheet('token')}/>
+      <${SRow} ic="nft" label=${t('alchemyKey')} right=${html`<span class="dim">${s.alchemy ? '••••' : ''}</span>`} onClick=${() => setSheet('alchemy')}/>
+    <//>
+
+    ${hasVault() && html`<${Group} title=${t('secDanger')}><${SRow} danger ic="close" label=${t('resetWallet')} onClick=${() => { if (confirm(t('resetWarn'))) resetWallet(); }}/><//>`}
+    <p class="dim small about">${t('aboutText')}</p><div style="height:110px"/>
     ${sheet === 'book' && html`<${BookSheet} onClose=${() => setSheet(null)}/>`}
     ${sheet === 'token' && html`<${TokenSheet} onClose=${() => setSheet(null)}/>`}
     ${sheet === 'alchemy' && html`<${KeySheet} onClose=${() => setSheet(null)}/>`}
     ${sheet === 'seed' && html`<${SeedSheet} onClose=${() => setSheet(null)}/>`}
+    ${sheet === 'pass' && html`<${PassSheet} onClose=${() => setSheet(null)}/>`}
   </div>`;
 }
+
+const PassSheet = ({ onClose }) => {
+  const [o, setO] = useState(''), [n, setN] = useState(''), [n2, setN2] = useState(''), [err, setErr] = useState(''), [busy, setBusy] = useState(false);
+  const go = async () => {
+    if (n.length < 8) return setErr(t('passShort'));
+    if (n !== n2) return setErr(t('passMismatch'));
+    setBusy(true);
+    try { const { mnemonic } = await unlockVault(o); await saveVault(n, { mnemonic }); toast(t('passChanged')); onClose(); }
+    catch { setErr(t('wrongPass')); setBusy(false); }
+  };
+  return html`<${Sheet} title=${t('changePass')} onClose=${onClose}>
+    <input class="field glass" type="password" autocomplete="current-password" placeholder=${t('oldPass')} value=${o} onInput=${(e) => { setO(e.target.value); setErr(''); }}/>
+    <input class="field glass" type="password" autocomplete="new-password" placeholder=${t('newPass')} value=${n} onInput=${(e) => { setN(e.target.value); setErr(''); }}/>
+    <input class="field glass" type="password" autocomplete="new-password" placeholder=${t('pass2')} value=${n2} onInput=${(e) => { setN2(e.target.value); setErr(''); }}/>
+    ${err && html`<p class="err">${err}</p>`}<${Btn} busy=${busy} disabled=${!o || !n} onClick=${go}>${t('save')}<//><//>`;
+};
 
 const BookSheet = ({ onClose }) => {
   const [l, setL] = useState(''), [a, setA] = useState('');
