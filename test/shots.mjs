@@ -30,8 +30,8 @@ await step('asset', async () => { await p.click('.list .row >> nth=0'); await p.
 await step('receive', async () => { await p.click('.act >> nth=1'); await p.waitForSelector('.sheet'); await shot('06-receive-pick'); await p.click('.sheet .row >> nth=0'); await p.waitForSelector('.qr'); await shot('07-receive'); await p.click('.icon-btn.glass'); });
 await step('send', async () => {
   await p.click('.act >> nth=0'); await p.waitForSelector('.sheet'); await p.click('.sheet .row >> nth=0');
-  await p.fill('.plain', '0x71C7656EC7ab88b098defB751B7401B5f6d8976F');
-  for (const k of ['0', '.', '2']) await p.click(`.keypad button:text-is("${k}")`);
+  await p.fill('.plain', 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh');
+  for (const k of ['0', '.', '0', '1']) await p.click(`.keypad button:text-is("${k}")`);
   await shot('08-send'); await p.click('.btn.primary'); await p.waitForTimeout(400); await shot('09-send-review');
   await p.click('.btn.primary'); await p.waitForSelector('.okc'); await p.waitForTimeout(700); await shot('10-send-done'); await p.click('.btn.primary');
 });
