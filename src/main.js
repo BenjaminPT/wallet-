@@ -13,7 +13,6 @@ const TABS = [['home', 'home'], ['market', 'market'], ['nft', 'nft'], ['settings
 function Coach() {
   const s = useStore();
   const [i, setI] = useState(0);
-  if (s.s.coached || s.s.mode !== 'demo' && false) return null;
   const steps = ['coach1', 'coach2', 'coach3'];
   const next = () => (i === 2 ? setSettings({ coached: true }) : setI(i + 1));
   return html`<div class="coach" onClick=${next}><div class=${`coach-card glass-strong pos${i}`}><p>${t(steps[i])}</p><b>${i === 2 ? t('gotIt') : t('next')} →</b></div></div>`;
@@ -29,7 +28,7 @@ function App() {
   if (!top) return null;
   let view;
   if (top.name === 'home') view = tab === 'home' ? html`<${Home}/>` : tab === 'market' ? html`<${MarketTab}/>` : tab === 'nft' ? html`<${NftTab}/>` : html`<${SettingsTab}/>`;
-  else if (top.name === 'sendPick') view = html`<${Home}/><${SendPick}/>`;
+  else if (top.name === 'sendPick') view = html`<${Home}/><${SendPick} ...${top.props}/>`;
   else if (top.name === 'receivePick') view = html`<${Home}/><${ReceivePick}/>`;
   else { const C = SCREENS[top.name]; view = html`<${C} key=${top.name + s.stack.length} ...${top.props}/>`; }
   const showTabs = top.name === 'home';

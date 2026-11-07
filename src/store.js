@@ -4,13 +4,12 @@ import { deriveAll, getKeys } from './core/derive.js';
 import { assetList, assetId, netOf } from './core/assets.js';
 import { getBalance, getHistory, getEvmHistory, loadPending, refreshPending, bumpPending } from './core/chains.js';
 import { getPrices } from './core/market.js';
-import { DEMO_ADDRS, DEMO_BAL, DEMO_PRICES, DEMO_TXS } from './core/demo.js';
-import { setLang, detectLang } from './i18n.js';
+import { setLang, detectLang, t } from './i18n.js';
 import { bioUnlock, bioDisable, bioMigrate } from './core/bio.js';
 
 const SKEY = 'noir.settings.v1';
-const defaults = { lang: detectLang(), fiat: 'usd', mode: 'demo', testnets: false, autolock: 5, onboarded: false, coached: false, book: [], custom: [], alchemy: '' };
-const load = () => { try { return { ...defaults, ...JSON.parse(localStorage.getItem(SKEY)) }; } catch { return { ...defaults }; } };
+const defaults = { lang: detectLang(), fiat: 'usd', mode: 'real', icon: 'dark', testnets: false, autolock: 5, onboarded: false, coached: false, book: [], custom: [], alchemy: '' };
+const load = () => { try { return { ...defaults, ...JSON.parse(localStorage.getItem(SKEY)), mode: 'real' }; } catch { return { ...defaults }; } };
 
 const S = {
   s: load(),
@@ -46,15 +45,21 @@ export const resetTo = (name, props = {}) => { S.stack = [{ name, props }]; emit
 export const toast = (msg) => { S.toast = msg; emit(); setTimeout(() => { if (S.toast === msg) { S.toast = null; emit(); } }, 2200); };
 
 // ---------- настройки ----------
+// Иконка приложения (тёмная/светлая): меняет значок вкладки и apple-touch-icon (для следующей установки на экран «Домой»)
+export function applyIcon(v = S.s.icon) {
+  const sfx = v === 'light' ? '-light' : '';
+  document.querySelector('link[rel="icon"]')?.setAttribute('href', `icon${sfx}.svg`);
+  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href', `icon${sfx}-192.png`);
+}
 export function setSettings(patch) {
   S.s = { ...S.s, ...patch };
   try { localStorage.setItem(SKEY, JSON.stringify(S.s)); } catch {}
   if (patch.lang) setLang(patch.lang);
+  if (patch.icon) applyIcon(patch.icon);
   emit();
   if (patch.fiat || patch.testnets !== undefined || patch.custom) refresh();
 }
 
-export const isDemo = () => S.s.mode === 'demo' || !S.addrs;
 export const assets = () => assetList(S.s.testnets, S.s.custom);
 
 // ---------- жизненный цикл ----------
@@ -72,20 +77,11 @@ function armLock() {
 document.addEventListener?.('visibilitychange', () => { if (document.hidden && S.s.mode === 'real' && S.s.autolock === 0) lock(); });
 
 export function init() {
-  const mid = migrateLegacy(); if (mid) bioMigrate(mid);
+  applyIcon();
+  const mid = migrateLegacy(t('mainAccount')); if (mid) bioMigrate(mid);
   syncAccounts();
-  if (S.s.mode === 'real' && hasAccounts()) { S.account = activeId(); S.locked = true; resetTo('unlock'); }
-  else if (S.s.mode === 'real') { S.s.mode = 'demo'; enterDemo(); }
-  else if (!S.s.onboarded) resetTo('onboarding');
-  else enterDemo();
-}
-
-export function enterDemo() {
-  S.s = { ...S.s, mode: 'demo', onboarded: true };
-  localStorage.setItem(SKEY, JSON.stringify(S.s));
-  S.addrs = DEMO_ADDRS; S.mnemonic = null; S.locked = false;
-  S.balances = { ...DEMO_BAL }; S.prices = DEMO_PRICES; S.txs = DEMO_TXS;
-  resetTo('home');
+  if (hasAccounts()) { S.account = activeId(); S.locked = true; resetTo('unlock'); }
+  else resetTo('onboarding');
 }
 
 // Открыть (сделать активным) уже разблокированный аккаунт
@@ -106,7 +102,8 @@ async function activate(id) {
 
 // Создать/импортировать аккаунт (может быть уже не первым)
 export async function createVault(mnemonic, password, name) {
-  const id = await addAccount({ name, password, mnemonic });
+  const n = listAccounts().length;
+  const id = await addAccount({ name: name || (n === 0 ? t('mainAccount') : `${t('accountWord')} ${n + 1}`), password, mnemonic });
   sessions[id] = mnemonic;
   await activate(id);
 }
@@ -171,8 +168,7 @@ export async function deleteAccount(id = S.account) {
     if (other) return activate(other);
     S.mnemonic = null; S.addrs = null;
     if (hasAccounts()) { S.locked = true; return resetTo('accounts'); }
-    S.s = { ...S.s, mode: 'demo' }; localStorage.setItem(SKEY, JSON.stringify(S.s));
-    return enterDemo();
+    return resetTo('onboarding');
   }
   emit();
 }
@@ -186,7 +182,6 @@ export async function currentKeys() {
 
 // ---------- данные ----------
 export async function refresh() {
-  if (S.s.mode === 'demo') { S.balances = { ...DEMO_BAL }; S.prices = DEMO_PRICES; S.txs = DEMO_TXS; emit(); return; }
   if (!S.addrs) return;
   const addrs = S.addrs, stale = () => S.addrs !== addrs; // аккаунт мог смениться или заблокироваться, пока шли запросы
   S.loading = true; emit();

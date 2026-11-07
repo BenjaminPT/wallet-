@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { html, Icon, Coin, Screen, Btn, Sheet, fmtFiat, fmtNum, short, pct, copyText, haptic } from './common.js';
 import { t } from '../i18n.js';
-import { state, push, pop, assets, balanceOf, priceOf, isDemo, currentKeys, toast, setSettings, refresh, lock, logout, deleteAccount, hasAccounts, resetTo, enterDemo, addrFor } from '../store.js';
+import { state, push, pop, assets, balanceOf, priceOf, currentKeys, toast, setSettings, refresh, lock, logout, deleteAccount, hasAccounts, resetTo, addrFor } from '../store.js';
 import { netOf, assetId, tag, label } from '../core/assets.js';
 import { explorerTx } from '../core/chains.js';
 import { lifiQuote, lifiExecute, jupQuote, jupExecute, lidoStake, lidoApr, getMarket } from '../core/market.js';
+import { Avatar } from './accounts.js';
 import { getAccount, unlockAccount, changeAccountPassword, renameAccount, listAccounts } from '../core/accounts.js';
 import { TermsSheet } from './auth.js';
 import { bioAvailable, bioEnabled, bioEnable, bioDisable } from '../core/bio.js';
@@ -29,7 +30,7 @@ export function Swap() {
   const bal = balanceOf(from);
   const nativeOf = (a) => assets().find((x) => x.net === a.net && x.native);
   const gasBal = balanceOf(nativeOf(from));
-  const needGas = !isDemo() && !from.native && gasBal <= 0;
+  const needGas = !from.native && gasBal <= 0;
   const addrs = state.addrs;
 
   const quote = async (silent) => {
@@ -38,8 +39,7 @@ export function Swap() {
     setErr('');
     try {
       let r;
-      if (isDemo()) { await new Promise((x) => setTimeout(x, 500)); const out = (amount * priceOf(from)) / (priceOf(to) || 1) * 0.997; r = { out, min: out * (1 - slip), tool: 'Demo', feeUsd: 0.4, secs: 30 }; }
-      else if (route === 'lifi') r = await lifiQuote({ from, to, amount, fromAddress: addrFor(from.net), toAddress: addrFor(to.net), slippage: slip });
+      if (route === 'lifi') r = await lifiQuote({ from, to, amount, fromAddress: addrFor(from.net), toAddress: addrFor(to.net), slippage: slip });
       else r = await jupQuote(from, to, amount, slip);
       setQ({ ...r, at: Date.now() });
     } catch (e) { setErr(e.message); setQ(null); }
@@ -57,8 +57,7 @@ export function Swap() {
   const exec = async () => {
     setBusy('x'); setErr('');
     try {
-      if (isDemo()) { await new Promise((r) => setTimeout(r, 900)); setDone('demo'); }
-      else {
+      {
         const k = await currentKeys();
         setDone(route === 'lifi' ? await lifiExecute(q, from, k, addrs, amount) : await jupExecute(q, k.sol, addrs.sol, from, amount));
         setTimeout(refresh, 5000);
@@ -94,13 +93,12 @@ export function Swap() {
 export function Stake() {
   const [apr, setApr] = useState(null), [amt, setAmt] = useState(''), [busy, setBusy] = useState(false), [msg, setMsg] = useState(''), [err, setErr] = useState('');
   const eth = assets().find((a) => a.net === 'eth' && a.native);
-  useEffect(() => { if (isDemo()) setApr(2.9); else lidoApr().then(setApr); }, []);
+  useEffect(() => { lidoApr().then(setApr); }, []);
   const amount = Number(amt || 0);
   const go = async () => {
     setBusy(true); setErr('');
     try {
-      if (isDemo()) { await new Promise((r) => setTimeout(r, 900)); setMsg('demo'); }
-      else { const k = await currentKeys(); setMsg(await lidoStake(k.evm, amount)); setTimeout(refresh, 5000); }
+      { const k = await currentKeys(); setMsg(await lidoStake(k.evm, amount)); setTimeout(refresh, 5000); }
     } catch (e) { setErr(e.shortMessage || e.message); }
     setBusy(false);
   };
@@ -115,15 +113,14 @@ export function Stake() {
 }
 
 // ---------------- NFT ----------------
-const DEMO_NFTS = [['#3a3a3a', 'Noir #1'], ['#555', 'Noir #2'], ['#222', 'Noir #3'], ['#777', 'Noir #4']];
 export function NftTab() {
   const [items, setItems] = useState(null), [err, setErr] = useState('');
   useEffect(() => {
-    if (isDemo()) return setItems(DEMO_NFTS.map(([c, n]) => ({ n, c })));
     if (!state.s.alchemy) return setErr('key');
     fetch(`https://eth-mainnet.g.alchemy.com/nft/v3/${state.s.alchemy}/getNFTsForOwner?owner=${state.addrs.evm}&withMetadata=true&pageSize=40`).then((r) => r.json()).then((d) => setItems((d.ownedNfts || []).map((x) => ({ n: x.name || `#${x.tokenId}`, img: x.image?.thumbnailUrl || x.image?.cachedUrl })))).catch(() => setErr('net'));
   }, [state.s.alchemy, state.s.mode]);
-  return html`<div class="tab"><h2>${t('nftTitle')}</h2>
+  return html`<div class="tab"><h2>${t('nftTitle')}<span class="beta">${t('betaTag')}</span></h2>
+    <p class="dim small beta-note">${t('nftBeta')}</p>
     ${err === 'key' && html`<p class="dim">${t('nftNeedKey')}</p>`}
     ${items && !items.length && html`<p class="dim">${t('nftEmpty')}</p>`}
     <div class="grid">${(items || []).map((x) => html`<div class="nft glass">${x.img ? html`<img class="nft-img" src=${x.img} loading="lazy" referrerpolicy="no-referrer" alt=""/>` : html`<div class="nft-img" style=${`background:${x.c}`}/>`}<b>${x.n}</b></div>`)}</div><div style="height:110px"/></div>`;
@@ -137,7 +134,6 @@ export function MarketTab() {
   useEffect(() => {
     let off = false;
     const load = async () => {
-      if (isDemo()) return setRows([['Bitcoin', 'BTC', 100200, 1.2], ['Ethereum', 'ETH', 2650, -0.4], ['Solana', 'SOL', 145, 5.1], ['TON', 'TON', 3.1, 0.8], ['Tron', 'TRX', 0.27, -1.1]].map(([name, symbol, p, c]) => ({ name, symbol, current_price: p, price_change_percentage_24h: c })));
       try {
         const d = await getMarket(state.s.fiat);
         if (off) return;
@@ -151,7 +147,7 @@ export function MarketTab() {
     return () => { off = true; clearInterval(iv); };
   }, [state.s.mode, state.s.fiat]);
   const f = (rows || []).filter((r) => (r.name + r.symbol).toLowerCase().includes(q.toLowerCase()));
-  return html`<div class="tab"><h2>${t('marketTitle')}${!isDemo() && html`<span class="live"><i/>LIVE</span>`}</h2>
+  return html`<div class="tab"><h2>${t('marketTitle')}<span class="live"><i/>LIVE</span></h2>
     <input class="field glass" placeholder=${t('search')} value=${q} onInput=${(e) => setQ(e.target.value)}/>
     <div class="list">${f.map((r) => html`<div class="row glass" key=${r.symbol}><${Coin} a=${{ sym: r.symbol.toUpperCase(), color: '#444' }}/><div class="grow-l"><b>${r.symbol.toUpperCase()}</b><span class="dim">${r.name}</span></div><div class="right"><b class=${flash[r.symbol] ? `flash-${flash[r.symbol]}` : ''} key=${r.current_price}>${fmtFiat(r.current_price, r.current_price < 1 ? 4 : 2)}</b><span class=${r.price_change_percentage_24h >= 0 ? 'up' : 'down'}>${pct(r.price_change_percentage_24h)}</span></div></div>`)}</div><div style="height:110px"/></div>`;
 }
@@ -175,27 +171,26 @@ export function SettingsTab() {
   const acc = getAccount(state.account), bioOn = bioEnabled(state.account);
   useEffect(() => { bioAvailable().then(setBioOk); }, []);
   const toggleBio = async (v) => { if (!bioOk) return toast(t('bioUnsupported')); try { if (v) { await bioEnable(state.account, state.mnemonic, acc?.name); toast(t('bioOnToast')); } else bioDisable(state.account); force((n) => n + 1); } catch { toast(t('bioFail')); } };
-  const goReal = () => (hasAccounts() ? push('accounts') : push('setPass', { mode: 'create' }));
-  const real = s.mode === 'real' && state.addrs;
+  const real = !!state.addrs;
   const addr = real ? state.addrs.evm : null;
   return html`<div class="tab set-tab"><h2>${t('settings')}</h2>
     <div class="prof glass">
-      <div class="prof-av">${real ? html`<${Icon} n="lock" s=${22}/>` : html`<${Icon} n="eye" s=${22}/>`}</div>
-      <div class="grow-l"><b>${real ? (acc?.name || 'Noir Wallet') : t('modeDemo')}</b><span class="dim small mono">${real ? short(addr) : t('needRealWallet')}</span></div>
+      <${Avatar} a=${acc || { name: 'N', color: 0 }} s=${44}/>
+      <div class="grow-l"><b>${acc?.name || 'Noir Wallet'}</b><span class="dim small mono">${short(addr)}</span></div>
       ${real && html`<button class="icon-btn" aria-label=${t('copy')} onClick=${async () => { await copyText(addr); toast(t('copied')); }}><${Icon} n="copy" s=${18}/></button>`}
     </div>
-    <${Seg} value=${s.mode} options=${[['demo', t('modeDemo')], ['real', t('modeReal')]]} onChange=${(v) => (v === 'demo' ? enterDemo() : s.mode !== 'real' && goReal())}/>
 
     <${Group} title=${t('secGeneral')}>
       <${SRow} ic="globe" label=${t('language')} right=${html`<${Seg} value=${s.lang} options=${[['ru', 'RU'], ['en', 'EN']]} onChange=${(v) => setSettings({ lang: v })}/>`}/>
       <${SRow} ic="market" label=${t('currency')} right=${html`<${Seg} value=${s.fiat} options=${[['usd', 'USD'], ['eur', 'EUR'], ['rub', 'RUB']]} onChange=${(v) => setSettings({ fiat: v })}/>`}/>
+      <${SRow} ic="eye" label=${t('appIcon')} right=${html`<${Seg} value=${s.icon || 'dark'} options=${[['dark', t('iconDark')], ['light', t('iconLight')]]} onChange=${(v) => setSettings({ icon: v })}/>`}/>
       <${SRow} ic="swap" label=${t('testnets')} right=${html`<${Switch} on=${s.testnets} label=${t('testnets')} onChange=${(v) => setSettings({ testnets: v })}/>`}/>
     <//>
 
     <${Group} title=${t('secSecurity')}>
-      <${SRow} ic="lock" label=${t('autolock')} hint=${s.mode !== 'real' ? t('realOnly') : null} right=${html`<${Seg} value=${s.autolock} options=${[[1, '1'], [5, '5'], [15, '15'], [0, '∞']]} onChange=${(v) => setSettings({ autolock: v })}/>`}/>
-      ${s.mode === 'real' && html`<${SRow} ic="eye" label=${t('bio')} hint=${bioOk ? t('bioHint') : t('bioUnsupported')} right=${html`<${Switch} on=${bioOn} label=${t('bio')} onChange=${toggleBio}/>`}/>`}
-      ${s.mode === 'real' && html`<${SRow} ic="key" label=${t('showSeed')} onClick=${() => setSheet('seed')}/><${SRow} ic="lock" label=${t('changePass')} onClick=${() => setSheet('pass')}/><${SRow} ic="close" label=${t('lock')} onClick=${lock}/>`}
+      <${SRow} ic="lock" label=${t('autolock')} right=${html`<${Seg} value=${s.autolock} options=${[[1, '1'], [5, '5'], [15, '15'], [0, '∞']]} onChange=${(v) => setSettings({ autolock: v })}/>`}/>
+      ${real && html`<${SRow} ic="eye" label=${t('bio')} hint=${bioOk ? t('bioHint') : t('bioUnsupported')} right=${html`<${Switch} on=${bioOn} label=${t('bio')} onChange=${toggleBio}/>`}/>`}
+      ${real && html`<${SRow} ic="key" label=${t('showSeed')} onClick=${() => setSheet('seed')}/><${SRow} ic="lock" label=${t('changePass')} onClick=${() => setSheet('pass')}/><${SRow} ic="close" label=${t('lock')} onClick=${lock}/>`}
     <//>
 
     <${Group} title=${t('accountsTitle')}>

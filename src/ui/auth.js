@@ -3,8 +3,9 @@ import { html, Icon, Screen, Btn, Sheet, haptic } from './common.js';
 import { TERMS } from '../legal.js';
 import { getLang } from '../i18n.js';
 import { t } from '../i18n.js';
-import { push, pop, enterDemo, createVault, unlock, unlockBiometric, switchAccount, isUnlocked, hasAccounts, setSettings, resetTo, state } from '../store.js';
+import { push, pop, createVault, unlock, unlockBiometric, switchAccount, isUnlocked, hasAccounts, setSettings, resetTo, state } from '../store.js';
 import { bioEnabled, bioAvailable } from '../core/bio.js';
+import { Mark } from './mark.js';
 import { listAccounts, getAccount } from '../core/accounts.js';
 const short = (a) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : '');
 const signIn = () => push(hasAccounts() ? 'accounts' : 'import');
@@ -16,13 +17,13 @@ export function Onboarding() {
   const slides = [1, 2, 3, 4];
   const last = i === 3;
   return html`<div class="screen onb">
-    <div class="onb-top"><b>noir</b><span class="onb-links">${!last && html`<button class="link" onClick=${() => setI(3)}>${t('skip')}</button>`}<button class="link signin" onClick=${signIn}>${t('signIn')}</button></span></div>
+    <div class="onb-top"><b class="logo"><${Mark} s=${24}/></b><span class="onb-links">${!last && html`<button class="link" onClick=${() => setI(3)}>${t('skip')}</button>`}<button class="link signin" onClick=${signIn}>${t('signIn')}</button></span></div>
     <div class="onb-art" key=${i}><div class="ring r1"/><div class="ring r2"/><div class="ring r3"/><div class="onb-ic"><${Icon} n=${['globe', 'key', 'lock', 'eye'][i]} s=${54} w=${1.4}/></div></div>
     <div class="onb-txt" key=${'t' + i}><h1>${t(`ob${i + 1}t`)}</h1><p class="dim">${t(`ob${i + 1}d`)}</p></div>
     <div class="onb-bot">
       <div class="bars">${slides.map((s, k) => html`<i class=${k <= i ? 'on' : ''}/>`)}</div>
       ${last
-        ? html`<${Btn} onClick=${() => push('setPass', { mode: 'create' })}>${t('createWallet')}<//><${Btn} kind="ghost" onClick=${signIn}>${t('signInFull')}<//><button class="link center" onClick=${enterDemo}>${t('tryDemo')}</button>`
+        ? html`<${Btn} onClick=${() => push('setPass', { mode: 'create' })}>${t('createWallet')}<//><${Btn} kind="ghost" onClick=${signIn}>${t('signInFull')}<//>`
         : html`<${Btn} onClick=${() => { haptic(); setI(i + 1); }}>${t('next')}<//>`}
     </div>
   </div>`;
@@ -119,7 +120,7 @@ export function Unlock() {
     try { await unlock(p, id); } catch (e) { const m = /locked_out:(\d+)/.exec(e.message); setErr(m ? t('lockedOut', { s: m[1] }) : t('wrongPass')); setBusy(false); }
   };
   return html`<div class="screen onb">
-    <div class="onb-top"><b>noir</b></div>
+    <div class="onb-top"><b class="logo"><${Mark} s=${24}/></b></div>
     <div class="onb-art"><div class="ring r1"/><div class="ring r2"/><div class="ring r3"/><div class="onb-ic"><${Icon} n="lock" s=${54} w=${1.4}/></div></div>
     <div class="onb-txt"><h1>${t('unlockTitle')}</h1>${acc && html`<p class="dim mono">${acc.name} · ${short(acc.addr)}</p>`}</div>
     <div class="onb-bot">
@@ -128,7 +129,7 @@ export function Unlock() {
       <${Btn} onClick=${go} busy=${busy} disabled=${!p}>${t('unlock')}<//>
       ${bio && html`<${Btn} kind="ghost" onClick=${goBio}>${t('bioUnlock')}<//>`}
       <button class="link center" onClick=${() => push('accounts')}>${t('switchAccount')}</button>
-      <button class="link center" onClick=${enterDemo}>${t('tryDemo')}</button>
+      
     </div>
   </div>`;
 }
