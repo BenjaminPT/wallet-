@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { getPrices, getChart, getMarket, lifiQuote, jupQuote, lidoApr, jupGuard, SOL_MINT } from '../src/core/market.js';
 import { getBalance, getEvmHistory, getHistory, estimateFee, evmProvider, validateAddress } from '../src/core/chains.js';
 import { assetList, NETS } from '../src/core/assets.js';
-import { verifyTronTx, verifyLifiEvm, LIFI_DIAMOND } from '../src/core/guard.js';
+import { verifyTronTx, verifyLifiEvm, LIFI_DIAMOND, LIFI_TRON } from '../src/core/guard.js';
 import { Connection, PublicKey, VersionedTransaction } from '@solana/web3.js';
 
 const T = { timeout: 90000 };
@@ -87,6 +87,7 @@ test('LI.FI: Tron-USDT → EVM, транзакция Tron проходит пр�
   assert.ok(tx, 'нет tronTransaction');
   const c = tx.raw_data.contract[0];
   console.log('LI.FI Tron contract=', c.parameter.value.contract_address, 'type=', c.type, 'call_value=', c.parameter.value.call_value, 'approval=', q.approval, 'skipApproval=', q.skipApproval);
+  assert.equal(c.parameter.value.contract_address, LIFI_TRON, 'адрес LI.FI на Tron изменился');
   assert.ok(verifyTronTx(tx, { owner: TRON_ADDR, kind: 'lifi', maxCallValue: (q.nativeFeeWei * 105n) / 100n }));
 });
 test('Tron: собственные транзакции (TRX и TRC20) проходят проверку подмены', T, async () => {

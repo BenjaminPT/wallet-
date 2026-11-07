@@ -16,7 +16,7 @@ export function units(amount, decimals) {
 }
 
 export const LIFI_DIAMOND = '0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae';
-export const LIFI_TRON = null; // заполняется после проверки живой котировкой (см. test/live.test.mjs)
+export const LIFI_TRON = 'TU3ymitEKCWQFtASkEeHaPb8NfZcJtCHLt'; // проверено живой котировкой LI.FI (test/live.test.mjs)
 
 // ----- Tron -----
 const tronAddrEq = (a, b) => {

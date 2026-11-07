@@ -12,26 +12,26 @@
     "test:live": "node --test test/live.test.mjs"
   },
   "dependencies": {
-    "@noble/curves": "^1.6.0",
-    "@noble/hashes": "^1.5.0",
-    "@scure/base": "^1.1.9",
-    "@scure/bip32": "^1.5.0",
-    "@scure/bip39": "^1.4.0",
-    "@scure/btc-signer": "^1.4.0",
-    "@solana/spl-token": "^0.4.9",
-    "@solana/web3.js": "^1.95.3",
-    "@ton/core": "^0.62.0",
-    "@ton/crypto": "^3.3.0",
-    "@ton/ton": "^15.1.0",
-    "buffer": "^6.0.3",
-    "ethers": "^6.13.4",
-    "htm": "^3.1.1",
-    "jsqr": "^1.4.0",
-    "preact": "^10.24.3",
-    "qrcode-generator": "^1.4.4"
+    "@noble/curves": "1.9.7",
+    "@noble/hashes": "1.8.0",
+    "@scure/base": "1.2.6",
+    "@scure/bip32": "1.7.0",
+    "@scure/bip39": "1.6.0",
+    "@scure/btc-signer": "1.8.1",
+    "@solana/spl-token": "0.4.15",
+    "@solana/web3.js": "1.99.0",
+    "@ton/core": "0.62.1",
+    "@ton/crypto": "3.3.0",
+    "@ton/ton": "15.4.0",
+    "buffer": "6.0.3",
+    "ethers": "6.17.0",
+    "htm": "3.1.1",
+    "jsqr": "1.4.0",
+    "preact": "10.29.8",
+    "qrcode-generator": "1.5.2"
   },
   "devDependencies": {
-    "esbuild": "^0.24.0",
-    "playwright": "^1.48.0"
+    "esbuild": "0.24.2",
+    "playwright": "1.65.0"
   }
 }
