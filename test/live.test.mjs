@@ -31,8 +31,9 @@ test('курсы: USD/EUR/RUB в реальном времени', T, async () =
 test('графики и рынок', T, async () => {
   for (const d of [1, 7, 30, 365]) assert.ok((await getChart('bitcoin', d)).length > 30, `chart ${d}`);
   const m = await getMarket('usd');
+  console.log(`::notice title=market::строк ${m.length}`);
   assert.ok(m.length >= 40 && m.some((r) => r.symbol === 'BTC'), `market rows: ${m.length}`);
-  const ic = await getIconMap(); const have = m.filter((r) => ic[r.symbol]).length; console.log('иконки:', have, '/', m.length);
+  const ic = await getIconMap(); const have = m.filter((r) => ic[r.symbol]).length; console.log(`::notice title=icons::иконки ${have} из ${m.length}`);
   assert.ok(have / m.length > 0.7, 'иконки доступны для >70% монет');
 });
 test('EVM RPC: все сети отвечают, chainId верный', T, async () => {
