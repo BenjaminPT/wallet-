@@ -32,6 +32,7 @@ export const TOKENS = [
   t('sol', 'USDC', 'USD Coin', 6, 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'),
   t('sol', 'USDT', 'Tether', 6, 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', 'tether', '#26a17b'),
   t('tron', 'USDT', 'Tether', 6, 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t', 'tether', '#26a17b'),
+  t('ton', 'USDT', 'Tether', 6, 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs', 'tether', '#26a17b'),
 ];
 
 export const allNets = (testnets) => ({ ...NETS, ...(testnets ? TESTNETS : {}) });
@@ -52,10 +53,10 @@ export function assetList(testnets = false, custom = []) {
 // удобные заглушки для чисел
 export const famOfNet = (id) => netOf(id)?.fam;
 
-TOKENS.forEach((x) => { if (x.sym === 'USDT' && (x.net === 'tron' || x.net === 'eth')) x.pin = true; });
+TOKENS.forEach((x) => { if (x.sym === 'USDT' && (x.net === 'tron' || x.net === 'eth' || x.net === 'ton')) x.pin = true; });
 
 // Стандарт токена для подписи: USDT · TRC20
-const STD = { eth: 'ERC20', bsc: 'BEP20', pol: 'Polygon', arb: 'Arbitrum', opt: 'Optimism', base: 'Base', sol: 'SPL', tron: 'TRC20', sepolia: 'Sepolia' };
+const STD = { eth: 'ERC20', bsc: 'BEP20', pol: 'Polygon', arb: 'Arbitrum', opt: 'Optimism', base: 'Base', sol: 'SPL', tron: 'TRC20', ton: 'Jetton', sepolia: 'Sepolia' };
 export const stdOf = (a) => STD[a.net] || '';
 export const tag = (a) => (a.native ? netOf(a.net).name : `${a.name} · ${stdOf(a)}`);
 export const label = (a) => (a.native ? a.sym : `${a.sym} · ${stdOf(a)}`);

@@ -149,3 +149,12 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 body.sheet-open .tabbar{transform:translateY(140%);opacity:0;pointer-events:none}
 .sheet-b{padding-bottom:max(env(safe-area-inset-bottom),20px)}
 .sheet-wrap{z-index:50}
+
+.chks{display:flex;flex-direction:column;gap:10px;margin-top:6px}
+.chk{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-radius:18px;background:rgba(255,255,255,.06);border:1px solid var(--bd);font-size:14px;line-height:1.4;transition:background .2s var(--ease-out)}
+.chk i{flex:none;width:24px;height:24px;border-radius:8px;border:1.5px solid rgba(255,255,255,.35);display:flex;align-items:center;justify-content:center;color:transparent;transition:all .18s var(--ease-out)}
+.chk.on i{background:#fff;border-color:#fff;color:#000;transform:scale(1.04)}
+.chk u{color:#fff}
+.terms{margin-bottom:12px}.terms b{font-size:15px}.terms p{margin:4px 0 0;font-size:14px;line-height:1.5}
+.tiny2{font-size:12px;margin:2px 6px 0}
+.pend{margin-bottom:10px}.dir.wait{color:#fff}.dir .spin{width:18px;height:18px;border-width:2px}.pbtns{display:flex;gap:6px}.mini{padding:8px 12px;border-radius:999px;background:rgba(255,255,255,.12);font-size:13px;font-weight:600;min-height:36px;transition:transform .15s var(--ease-out)}.mini:active{transform:scale(.95)}.mini:disabled{opacity:.4}

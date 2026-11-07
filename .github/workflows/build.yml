@@ -5,9 +5,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pages: write
-  id-token: write
+  contents: read
 
 concurrency:
   group: pages
@@ -16,15 +14,37 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm install --no-audit --no-fund
+      - name: Lockfile (создать и закоммитить один раз, дальше только npm ci)
+        run: |
+          if [ ! -f package-lock.json ]; then
+            npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add package-lock.json
+            git commit -m "chore: add package-lock.json"
+            git push
+          fi
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Проверка подписей npm-пакетов
+        run: npm audit signatures
+        continue-on-error: true
+      - name: Известные уязвимости зависимостей (production)
+        run: npm audit --omit=dev --audit-level=high
+        continue-on-error: true
       - run: npx playwright install --with-deps chromium
       - run: node test/icons.mjs
-      - run: npm test
+      - name: Юнит-тесты (адреса, шифрование, защита подписи)
+        run: npm test
+      - name: Живые проверки сетей (курсы, балансы, котировки, симуляции)
+        run: npm run test:live
+        continue-on-error: true
       - run: npm run build
       - name: UI smoke test + screenshots
         run: node test/shots.mjs
@@ -39,17 +59,20 @@ jobs:
           cp -r dist pkg/noir-wallet/app
           cp server/server.mjs Dockerfile pkg/noir-wallet/
           cp launch/* pkg/noir-wallet/
-          cp README.md TELEGRAM.md pkg/noir-wallet/ || true
+          cp README.md TELEGRAM.md SECURITY.md pkg/noir-wallet/ || true
           mkdir -p pkg/noir-wallet/telegram && cp telegram/setup-bot.mjs pkg/noir-wallet/telegram/
           chmod +x pkg/noir-wallet/*.sh pkg/noir-wallet/*.command
           (cd pkg && zip -qr ../noir-wallet.zip noir-wallet)
           cp dist/single.html noir-wallet-single.html
+          sha256sum dist/app.js noir-wallet.zip noir-wallet-single.html > SHA256SUMS.txt
+          cat SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
           name: noir-wallet
           path: |
             noir-wallet.zip
             noir-wallet-single.html
+            SHA256SUMS.txt
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
@@ -58,10 +81,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete latest -y --cleanup-tag || true
-          gh release create latest noir-wallet.zip noir-wallet-single.html --title "Noir Wallet" --notes "Архив (сервер на ПК/Mac) и автономный HTML. Сайт: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
+          gh release create latest noir-wallet.zip noir-wallet-single.html SHA256SUMS.txt --title "Noir Wallet" --notes "Архив (сервер на ПК/Mac), автономный HTML и контрольные суммы SHA-256. Сайт: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/  Коммит: ${{ github.sha }}"
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.d.outputs.page_url }}

@@ -2,10 +2,11 @@ import { useEffect, useState } from 'preact/hooks';
 import { hasVault, saveVault, unlockVault, wipeVault } from './core/vault.js';
 import { deriveAll, getKeys } from './core/derive.js';
 import { assetList, assetId, netOf } from './core/assets.js';
-import { getBalance, getHistory } from './core/chains.js';
+import { getBalance, getHistory, getEvmHistory, loadPending, refreshPending, bumpPending } from './core/chains.js';
 import { getPrices } from './core/market.js';
 import { DEMO_ADDRS, DEMO_BAL, DEMO_PRICES, DEMO_TXS } from './core/demo.js';
 import { setLang, detectLang } from './i18n.js';
+import { bioUnlock, bioDisable } from './core/bio.js';
 
 const SKEY = 'noir.settings.v1';
 const defaults = { lang: detectLang(), fiat: 'usd', mode: 'demo', testnets: false, autolock: 5, onboarded: false, coached: false, book: [], custom: [], alchemy: '' };
@@ -19,6 +20,7 @@ const S = {
   balances: {},
   prices: {},
   txs: [],
+  pending: loadPending(),
   loading: false,
   offline: false,
   stack: [],
@@ -84,8 +86,22 @@ export async function createVault(mnemonic, password) {
   await openSession(mnemonic);
 }
 
+// Задержка после неудачных попыток ввода пароля (защита интерфейса; офлайн-перебор останавливает только стойкость PBKDF2)
+const FKEY = 'noir.fails.v1';
+const fails = () => { try { return JSON.parse(localStorage.getItem(FKEY)) || { n: 0, until: 0 }; } catch { return { n: 0, until: 0 }; } };
+export const lockoutLeft = () => Math.max(0, Math.ceil((fails().until - Date.now()) / 1000));
 export async function unlock(password) {
-  const { mnemonic } = await unlockVault(password);
+  const left = lockoutLeft();
+  if (left) throw new Error(`locked_out:${left}`);
+  let mnemonic;
+  try { ({ mnemonic } = await unlockVault(password)); }
+  catch (e) {
+    const f = fails(); f.n++;
+    if (f.n >= 5) f.until = Date.now() + Math.min(3600, 30 * 2 ** (f.n - 5)) * 1000;
+    try { localStorage.setItem(FKEY, JSON.stringify(f)); } catch {}
+    throw e;
+  }
+  try { localStorage.removeItem(FKEY); } catch {}
   S.s = { ...S.s, mode: 'real' };
   await openSession(mnemonic);
 }
@@ -106,8 +122,14 @@ export function lock() {
   resetTo('unlock');
 }
 
+export async function unlockBiometric() {
+  const mnemonic = await bioUnlock();
+  S.s = { ...S.s, mode: 'real' };
+  await openSession(mnemonic);
+}
+
 export function resetWallet() {
-  wipeVault();
+  wipeVault(); bioDisable();
   S.mnemonic = null; S.addrs = null;
   S.s = { ...S.s, mode: 'demo' };
   localStorage.setItem(SKEY, JSON.stringify(S.s));
@@ -130,8 +152,9 @@ export async function refresh() {
   await Promise.all(list.map(async (a) => {
     try { S.balances[assetId(a)] = await getBalance(a, S.addrs); emit(); } catch { /* оставить предыдущее */ }
   }));
-  const hist = await Promise.all(['btc', 'sol', 'ton', 'tron'].map((n) => getHistory(n, S.addrs)));
-  S.txs = hist.flat().sort((a, b) => b.ts - a.ts).slice(0, 30);
+  const hist = await Promise.all([...['btc', 'sol', 'ton', 'tron'].map((n) => getHistory(n, S.addrs)), getEvmHistory(S.addrs.evm)]);
+  S.txs = hist.flat().sort((a, b) => b.ts - a.ts).slice(0, 40);
+  S.pending = await refreshPending();
   S.loading = false; emit();
 }
 
@@ -152,3 +175,15 @@ export async function refreshPrices() {
 }
 let tick = 0;
 setInterval(() => { tick++; if (tick % 5 === 0) { if (S.s.mode === 'real' && S.addrs && !document.hidden) refresh(); } else refreshPrices(); }, 12000);
+
+export async function bump(p, cancel) {
+  const k = await currentKeys();
+  await bumpPending(k, p, cancel);
+  S.pending = loadPending(); emit();
+}
+export async function pollPending() {
+  if (S.s.mode !== 'real' || document.hidden) return;
+  if (!S.pending.some((p) => p.status === 'pending')) return;
+  S.pending = await refreshPending(); emit();
+}
+setInterval(pollPending, 10000);

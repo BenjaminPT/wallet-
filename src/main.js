@@ -41,11 +41,22 @@ function App() {
   </div>`;
 }
 
-// Telegram Mini App: растянуть на весь экран и подогнать цвета
-try {
-  const tg = window.Telegram?.WebApp;
-  if (tg) { tg.ready(); tg.expand(); tg.setHeaderColor?.('#000000'); tg.setBackgroundColor?.('#000000'); }
-} catch {}
-
-init();
-render(html`<${App}/>`, document.getElementById('root'));
+// Защита от встраивания в чужие страницы (clickjacking). Исключение — Telegram Web.
+const ancestors = [...(location.ancestorOrigins || [])];
+const framed = window.top !== window.self;
+const tgFrame = ancestors.length > 0 && ancestors.every((o) => /^https:\/\/(web|webk|webz)\.telegram\.org$/.test(o));
+if (framed && !tgFrame) {
+  document.body.textContent = 'Noir Wallet cannot run inside another site. Open it directly.';
+} else {
+  // Telegram Mini App без внешнего скрипта: общаемся с клиентом Telegram напрямую
+  try {
+    const ev = (name, data = {}) => {
+      if (window.TelegramWebviewProxy) window.TelegramWebviewProxy.postEvent(name, JSON.stringify(data));
+      else if (framed) window.parent.postMessage(JSON.stringify({ eventType: name, eventData: data }), 'https://web.telegram.org');
+    };
+    if (location.hash.includes('tgWebAppData') || window.TelegramWebviewProxy) { ev('web_app_ready'); ev('web_app_expand'); ev('web_app_set_header_color', { color: '#000000' }); ev('web_app_set_background_color', { color: '#000000' }); }
+  } catch {}
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
+  init();
+  render(html`<${App}/>`, document.getElementById('root'));
+}

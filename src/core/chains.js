@@ -6,9 +6,10 @@ import { base58check } from '@scure/base';
 import { sha256 } from '@noble/hashes/sha256';
 import { Connection, PublicKey, SystemProgram, Transaction, Keypair, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { getAssociatedTokenAddressSync, createTransferCheckedInstruction, createAssociatedTokenAccountIdempotentInstruction } from '@solana/spl-token';
-import { TonClient, WalletContractV4, internal, toNano, fromNano } from '@ton/ton';
+import { TonClient, WalletContractV4, internal, toNano, fromNano, beginCell, Address } from '@ton/ton';
 import { netOf } from './assets.js';
 import { toHex, fromHex } from './derive.js';
+import { units, verifyTronTx } from './guard.js';
 
 const ERC20 = ['function balanceOf(address) view returns (uint256)', 'function transfer(address,uint256) returns (bool)', 'function approve(address,uint256) returns (bool)', 'function allowance(address,address) view returns (uint256)'];
 const providers = {};
@@ -46,6 +47,11 @@ export async function getBalance(asset, addrs) {
       return r.value.reduce((s, a) => s + (a.account.data.parsed.info.tokenAmount.uiAmount || 0), 0);
     }
     case 'ton': {
+      if (!asset.native) {
+        const d = await j(`https://toncenter.com/api/v3/jetton/wallets?owner_address=${addrs.ton}&jetton_address=${asset.contract}&limit=1`);
+        const w = d.jetton_wallets?.[0];
+        return w ? Number(w.balance) / 10 ** asset.decimals : 0;
+      }
       const d = await j(`${n.api}/getAddressBalance?address=${addrs.ton}`);
       return Number(fromNano(d.result));
     }
@@ -95,7 +101,7 @@ export async function estimateFee(asset, addrs, to, amount) {
         return { fee: (rate * 141) / 1e8, unit: 'BTC', rate };
       }
       case 'sol': return { fee: 0.000005 + (asset.native ? 0 : 0.002), unit: 'SOL' };
-      case 'ton': return { fee: 0.01, unit: 'TON' };
+      case 'ton': return { fee: asset.native ? 0.01 : 0.06, unit: 'TON' };
       case 'tron': return { fee: asset.native ? 0.3 : 15, unit: 'TRX' };
     }
   } catch { /* fallthrough */ }
@@ -108,14 +114,19 @@ export async function send(asset, keys, addrs, to, amount) {
   const n = netOf(asset.net);
   switch (n.fam) {
     case 'evm': {
-      const w = new Wallet(toHex(keys.evm), evmProvider(n.id));
-      if (asset.native) return (await w.sendTransaction({ to, value: parseUnits(String(amount), 18) })).hash;
-      const c = new Contract(asset.contract, ERC20, w);
-      return (await c.transfer(to, parseUnits(String(amount), asset.decimals))).hash;
+      const prov = evmProvider(n.id);
+      const fd = await prov.getFeeData();
+      if ((fd.maxFeePerGas || fd.gasPrice || 0n) > parseUnits('2000', 'gwei')) throw new Error('guard: gas price is abnormally high, refusing to send');
+      const w = new Wallet(toHex(keys.evm), prov);
+      let resp;
+      if (asset.native) resp = await w.sendTransaction({ to, value: units(amount, 18) });
+      else resp = await new Contract(asset.contract, ERC20, w).transfer(to, units(amount, asset.decimals));
+      rememberPending(n.id, resp);
+      return resp.hash;
     }
     case 'btc': return sendBtc(n, keys.btc, addrs.btc, to, amount);
     case 'sol': return sendSol(n, asset, keys.sol, addrs.sol, to, amount);
-    case 'ton': return sendTon(n, keys.ton, to, amount);
+    case 'ton': return sendTon(n, keys.ton, to, amount, asset, addrs.ton);
     case 'tron': return sendTron(n, asset, keys.tron, addrs.tron, to, amount);
   }
 }
@@ -125,9 +136,9 @@ async function sendBtc(n, priv, from, to, amount) {
   const pay = btc.p2wpkh(pub, btc.NETWORK);
   const utxos = await j(`${n.api}/address/${from}/utxo`);
   const fees = await j(`${n.api}/fee-estimates`);
-  const rate = Math.ceil(fees['3'] || 10);
+  const rate = Math.min(500, Math.ceil(fees['3'] || 10));
   const tx = new btc.Transaction();
-  const sats = BigInt(Math.round(amount * 1e8));
+  const sats = units(amount, 8);
   let total = 0n;
   for (const u of utxos.filter((x) => x.status?.confirmed || true)) {
     tx.addInput({ txid: u.txid, index: u.vout, witnessUtxo: { script: pay.script, amount: BigInt(u.value) } });
@@ -159,7 +170,7 @@ async function sendSol(n, asset, secret32, from, to, amount) {
     const src = getAssociatedTokenAddressSync(mint, kp.publicKey);
     const dst = getAssociatedTokenAddressSync(mint, toPk, true);
     tx.add(createAssociatedTokenAccountIdempotentInstruction(kp.publicKey, dst, toPk, mint));
-    tx.add(createTransferCheckedInstruction(src, mint, dst, kp.publicKey, BigInt(Math.round(amount * 10 ** asset.decimals)), asset.decimals));
+    tx.add(createTransferCheckedInstruction(src, mint, dst, kp.publicKey, units(amount, asset.decimals), asset.decimals));
   }
   const { blockhash, lastValidBlockHeight } = await c.getLatestBlockhash();
   tx.recentBlockhash = blockhash;
@@ -170,16 +181,23 @@ async function sendSol(n, asset, secret32, from, to, amount) {
   return sig;
 }
 
-async function sendTon(n, key, to, amount) {
+async function sendTon(n, key, to, amount, asset, owner) {
   const client = new TonClient({ endpoint: `${n.api}/jsonRPC` });
   const wallet = WalletContractV4.create({ workchain: 0, publicKey: Buffer.from(key.publicKey) });
   const contract = client.open(wallet);
   const seqno = await contract.getSeqno();
-  await contract.sendTransfer({
-    seqno,
-    secretKey: Buffer.from(key.secretKey),
-    messages: [internal({ to, value: toNano(String(amount)), bounce: false })],
-  });
+  let msg;
+  if (asset.native) msg = internal({ to, value: toNano(Number(amount).toFixed(9)), bounce: false });
+  else {
+    // джеттон (USDT): сообщение на jetton-кошелёк отправителя, op transfer (TEP-74)
+    const d = await j(`https://toncenter.com/api/v3/jetton/wallets?owner_address=${owner}&jetton_address=${asset.contract}&limit=1`);
+    const jw = d.jetton_wallets?.[0]?.address;
+    if (!jw) throw new Error('jetton_wallet_not_found');
+    const body = beginCell().storeUint(0xf8a7ea5, 32).storeUint(0, 64).storeCoins(units(amount, asset.decimals))
+      .storeAddress(Address.parse(to)).storeAddress(Address.parse(owner)).storeBit(0).storeCoins(1n).storeBit(0).endCell();
+    msg = internal({ to: Address.parse(jw), value: toNano('0.05'), bounce: true, body });
+  }
+  await contract.sendTransfer({ seqno, secretKey: Buffer.from(key.secretKey), messages: [msg] });
   return `seqno:${seqno}`;
 }
 
@@ -189,14 +207,17 @@ async function sendTron(n, asset, priv, from, to, amount) {
   const post = (path, body) => j(`${n.api}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   let tx;
   if (asset.native) {
-    tx = await post('/wallet/createtransaction', { owner_address: from, to_address: to, amount: Math.round(amount * 1e6), visible: true });
+    tx = await post('/wallet/createtransaction', { owner_address: from, to_address: to, amount: Number(units(amount, 6)), visible: true });
+    verifyTronTx(tx, { owner: from, kind: 'native', to, amount: units(amount, 6) });
   } else {
-    const param = tronHex(to).slice(2).padStart(64, '0') + BigInt(Math.round(amount * 10 ** asset.decimals)).toString(16).padStart(64, '0');
+    const raw = units(amount, asset.decimals);
+    const param = tronHex(to).slice(2).padStart(64, '0') + raw.toString(16).padStart(64, '0');
     const r = await post('/wallet/triggersmartcontract', {
       owner_address: from, contract_address: asset.contract, function_selector: 'transfer(address,uint256)',
       parameter: param, fee_limit: 30000000, call_value: 0, visible: true,
     });
     tx = r.transaction;
+    verifyTronTx(tx, { owner: from, kind: 'trc20', to, amount: raw, contract: asset.contract });
   }
   if (!tx?.txID) throw new Error('tron_build_failed');
   const sig = secp256k1.sign(fromHex(tx.txID), priv);
@@ -286,4 +307,74 @@ export async function tronApprove(priv, owner, token, spender, amount) {
   const id = await tronBroadcast(priv, r.transaction);
   await tronWaitConfirmed(id);
   return id;
+}
+
+// ---------- Ожидающие EVM-транзакции (для статуса, ускорения и отмены) ----------
+const PKEY = 'noir.pending.v1';
+export const loadPending = () => { try { return JSON.parse(localStorage.getItem(PKEY)) || []; } catch { return []; } };
+const savePending = (l) => { try { localStorage.setItem(PKEY, JSON.stringify(l.slice(-30))); } catch {} };
+export function rememberPending(net, resp, extra = {}) {
+  const l = loadPending();
+  l.push({ net, hash: resp.hash, nonce: resp.nonce, from: resp.from, to: resp.to, value: String(resp.value ?? 0n), data: resp.data, gasLimit: String(resp.gasLimit), maxFeePerGas: String(resp.maxFeePerGas ?? resp.gasPrice ?? 0n), maxPriorityFeePerGas: String(resp.maxPriorityFeePerGas ?? 0n), ts: Date.now(), status: 'pending', ...extra });
+  savePending(l);
+}
+export async function refreshPending() {
+  const l = loadPending();
+  let changed = false;
+  for (const p of l) {
+    if (p.status !== 'pending') continue;
+    try {
+      const r = await evmProvider(p.net).getTransactionReceipt(p.hash);
+      if (r) { p.status = r.status === 1 ? 'confirmed' : 'failed'; changed = true; }
+      else {
+        // заменена другой транзакцией с тем же nonce?
+        const cnt = await evmProvider(p.net).getTransactionCount(p.from, 'latest');
+        if (cnt > p.nonce) { p.status = 'replaced'; changed = true; }
+      }
+    } catch { /* сеть недоступна */ }
+  }
+  if (changed) savePending(l);
+  return l;
+}
+// Ускорить (тот же nonce, комиссия +30%) или отменить (0 ETH себе, комиссия +30%)
+export async function bumpPending(keys, p, cancel) {
+  const w = new Wallet(toHex(keys.evm), evmProvider(p.net));
+  if (w.address.toLowerCase() !== p.from.toLowerCase()) throw new Error('wrong_account');
+  const bump = (x) => (BigInt(x) * 130n) / 100n + 1n;
+  const fd = await evmProvider(p.net).getFeeData();
+  const maxFee = bump(BigInt(p.maxFeePerGas) > (fd.maxFeePerGas ?? 0n) ? p.maxFeePerGas : String(fd.maxFeePerGas ?? p.maxFeePerGas));
+  const tip = bump(p.maxPriorityFeePerGas);
+  if (maxFee > parseUnits('2000', 'gwei')) throw new Error('guard: gas price is abnormally high');
+  const tx = cancel
+    ? { to: p.from, value: 0n, nonce: p.nonce, gasLimit: 21000n, maxFeePerGas: maxFee, maxPriorityFeePerGas: tip > maxFee ? maxFee : tip }
+    : { to: p.to, value: BigInt(p.value), data: p.data, nonce: p.nonce, gasLimit: BigInt(p.gasLimit), maxFeePerGas: maxFee, maxPriorityFeePerGas: tip > maxFee ? maxFee : tip };
+  const resp = await w.sendTransaction(tx);
+  const l = loadPending();
+  const old = l.find((x) => x.hash === p.hash);
+  if (old) old.status = 'replaced';
+  savePending(l);
+  rememberPending(p.net, resp, { replaces: p.hash, cancel: !!cancel });
+  return resp.hash;
+}
+
+// ---------- История EVM через Blockscout (без ключей) ----------
+const BS = { eth: 'https://eth.blockscout.com', base: 'https://base.blockscout.com', opt: 'https://optimism.blockscout.com', arb: 'https://arbitrum.blockscout.com', pol: 'https://polygon.blockscout.com' };
+export async function getEvmHistory(addr) {
+  const out = [];
+  await Promise.all(Object.entries(BS).map(async ([net, base]) => {
+    try {
+      const [tx, tk] = await Promise.all([j(`${base}/api/v2/addresses/${addr}/transactions`), j(`${base}/api/v2/addresses/${addr}/token-transfers`)]);
+      const me = addr.toLowerCase();
+      for (const t of (tx.items || []).slice(0, 8)) {
+        const v = Number(t.value || 0) / 1e18;
+        if (!v && t.method) continue; // контрактные вызовы без value показываются токен-переводами
+        out.push({ id: t.hash, net, sym: netOf(net).sym, dir: t.from?.hash?.toLowerCase() === me ? 'out' : 'in', amount: v, ts: Date.parse(t.timestamp), failed: t.status === 'error' });
+      }
+      for (const t of (tk.items || []).slice(0, 8)) {
+        const dec = Number(t.total?.decimals ?? t.token?.decimals ?? 18);
+        out.push({ id: t.transaction_hash || t.tx_hash, net, sym: t.token?.symbol || '?', dir: t.from?.hash?.toLowerCase() === me ? 'out' : 'in', amount: Number(t.total?.value || 0) / 10 ** dec, ts: Date.parse(t.timestamp) });
+      }
+    } catch { /* индексатор недоступен для этой сети */ }
+  }));
+  return out.sort((a, b) => b.ts - a.ts).slice(0, 25);
 }

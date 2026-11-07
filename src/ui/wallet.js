@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { html, Icon, Coin, Screen, Btn, Sheet, Chart, Keypad, QR, Scanner, fmtFiat, fmtNum, short, pct, ago, copyText, haptic } from './common.js';
 import { t } from '../i18n.js';
-import { state, push, pop, assets, balanceOf, priceOf, changeOf, valueOf, total, addrFor, refresh, isDemo, currentKeys, toast, setSettings } from '../store.js';
+import { state, push, pop, bump, assets, balanceOf, priceOf, changeOf, valueOf, total, addrFor, refresh, isDemo, currentKeys, toast, setSettings } from '../store.js';
 import { netOf, assetId, tag, label } from '../core/assets.js';
 import { getChart } from '../core/market.js';
 import { demoChart } from '../core/demo.js';
@@ -41,11 +41,24 @@ export function Home() {
       <${Coin} a=${a}/><div class="grow-l"><b>${a.sym}</b><span class="dim">${tag(a)}</span></div>
       <div class="right"><b>${fmtFiat(valueOf(a))}</b><span class=${changeOf(a) >= 0 ? 'up' : 'down'}>${fmtNum(balanceOf(a))} · ${pct(changeOf(a))}</span></div></button>`)}</div>
     <h3>${t('activity')}</h3>
+    <${PendingList}/>
     <div class="list">${state.txs.length ? state.txs.slice(0, 8).map((x) => html`<a class="row glass" key=${x.id} href=${isDemo() ? null : explorerTx(x.net, x.id)} target="_blank" rel="noopener">
       <span class=${`dir ${x.dir}`}><${Icon} n=${x.dir === 'out' ? 'send' : 'receive'} s=${18}/></span><div class="grow-l"><b>${x.dir === 'out' ? t('send') : t('receive')}</b><span class="dim">${netOf(x.net)?.name} · ${ago(x.ts)}</span></div>
       <div class="right"><b>${x.amount === null ? '' : `${x.dir === 'out' ? '−' : '+'}${fmtNum(x.amount)} ${x.sym}`}</b></div></a>`) : html`<p class="dim center">${t('noActivity')}</p>`}</div>
     <div style="height:110px"/>
   </div>`;
+}
+
+function PendingList() {
+  const [busy, setBusy] = useState('');
+  const l = state.pending.filter((p) => p.status === 'pending' || Date.now() - p.ts < 3600e3).slice(-4).reverse();
+  if (!l.length || isDemo()) return null;
+  const act = async (p, cancel) => { setBusy(p.hash + cancel); try { await bump(p, cancel); toast(t('sent')); } catch (e) { toast((e.shortMessage || e.message).slice(0, 60)); } setBusy(''); };
+  return html`<div class="list pend">${l.map((p) => html`<div class="row glass" key=${p.hash}>
+    <span class=${`dir ${p.status === 'pending' ? 'wait' : p.status === 'confirmed' ? 'in' : ''}`}>${p.status === 'pending' ? html`<span class="spin"/>` : html`<${Icon} n=${p.status === 'confirmed' ? 'check' : 'close'} s=${18}/>`}</span>
+    <div class="grow-l"><b>${t('st_' + p.status)}${p.cancel ? ' · ' + t('cancelTx') : ''}</b><span class="dim">${netOf(p.net).name} · <a class="link tiny" href=${explorerTx(p.net, p.hash)} target="_blank" rel="noopener">${short(p.hash)}</a></span></div>
+    ${p.status === 'pending' && html`<div class="pbtns"><button class="mini" disabled=${!!busy} onClick=${() => act(p, false)}>${busy === p.hash + false ? '…' : t('speedUp')}</button><button class="mini" disabled=${!!busy} onClick=${() => act(p, true)}>${t('cancelTx')}</button></div>`}
+  </div>`)}</div>`;
 }
 
 export function AssetPage({ id }) {
@@ -98,7 +111,12 @@ export function Send({ id }) {
   const enough = amount > 0 && amount + nativeFee <= bal + 1e-12;
   useEffect(() => { if (okAddr && amount > 0) estimateFee(a, state.addrs, to, amount).then(setFee); }, [okAddr, amt]);
   const fill = (f) => setAmt(String(Math.max(0, f === 1 ? bal - (a.native ? (fee?.fee || 0) * 1.2 : 0) : bal * f)).slice(0, 12));
-  const handleScan = (txt) => { setScan(false); setTo(txt.replace(/^[a-z]+:/i, '').split('?')[0]); };
+  const handleScan = (txt) => {
+    setScan(false);
+    // BIP21 / EIP-681: берём адрес получателя, а не адрес токена-контракта
+    const m = /[?&]address=([^&]+)/i.exec(txt);
+    setTo(decodeURIComponent(m ? m[1] : txt.replace(/^[a-z]+:/i, '').split(/[?@/]/)[0]).trim());
+  };
   const run = async () => {
     setSt('sending');
     try {

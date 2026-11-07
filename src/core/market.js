@@ -1,9 +1,10 @@
 // Цены и графики: Binance (реальное время, без ключа) → запасной CoinGecko. Обмен: LI.FI (EVM/Tron) и Jupiter (Solana). Стейкинг: Lido.
 import { Contract, Wallet, parseUnits } from 'ethers';
-import { Connection, Keypair, VersionedTransaction } from '@solana/web3.js';
-import { evmProvider, tronApprove, tronAllowance, tronBroadcast } from './chains.js';
+import { Connection, Keypair, PublicKey, VersionedTransaction } from '@solana/web3.js';
+import { evmProvider, tronApprove, tronAllowance, tronBroadcast, rememberPending } from './chains.js';
 import { netOf } from './assets.js';
 import { toHex } from './derive.js';
+import { units, verifyTronTx, verifyLifiEvm } from './guard.js';
 
 const CG = 'https://api.coingecko.com/api/v3';
 const BN = 'https://data-api.binance.vision/api/v3'; // публичное зеркало рыночных данных Binance (CORS открыт)
@@ -105,17 +106,23 @@ export async function lifiQuote({ from, to, amount, fromAddress, toAddress, slip
   const q = new URLSearchParams({
     fromChain: lifiChain(from.net), toChain: lifiChain(to.net),
     fromToken: lifiToken(from), toToken: lifiToken(to),
-    fromAmount: parseUnits(String(amount), from.decimals).toString(),
+    fromAmount: units(amount, from.decimals).toString(),
     fromAddress, toAddress: toAddress || fromAddress, slippage: String(slippage),
   });
   const r = await fetch(`https://li.quest/v1/quote?${q}`);
   const d = await r.json();
   if (!r.ok) throw new Error(d.message || 'lifi_quote');
   const usd = (d.estimate.gasCosts || []).reduce((s, g) => s + Number(g.amountUSD || 0), 0) + (d.estimate.feeCosts || []).reduce((s, g) => s + Number(g.amountUSD || 0), 0);
+  let nativeFeeWei = 0n;
+  for (const f of d.estimate.feeCosts || []) {
+    const a = (f.token?.address || '').toLowerCase();
+    if (a === ZERO || a === TRX_NATIVE.toLowerCase()) { try { nativeFeeWei += BigInt(f.amount); } catch {} }
+  }
   return {
     out: Number(d.estimate.toAmount) / 10 ** to.decimals,
     min: Number(d.estimate.toAmountMin) / 10 ** to.decimals,
     tool: d.toolDetails?.name || d.tool,
+    nativeFeeWei,
     approval: d.estimate.approvalAddress,
     skipApproval: !!d.estimate.skipApproval,
     feeUsd: usd,
@@ -127,7 +134,7 @@ export async function lifiQuote({ from, to, amount, fromAddress, toAddress, slip
 
 // keys = результат getKeys(); addrs = адреса кошелька
 export async function lifiExecute(quote, from, keys, addrs, amount) {
-  const need = parseUnits(String(amount), from.decimals);
+  const need = units(amount, from.decimals);
   if (netOf(from.net).fam === 'tron') {
     if (!from.native && !quote.skipApproval) {
       const have = await tronAllowance(addrs.tron, from.contract, quote.approval);
@@ -135,8 +142,10 @@ export async function lifiExecute(quote, from, keys, addrs, amount) {
     }
     const tx = quote.tx.customData?.tronTransaction;
     if (!tx) throw new Error('lifi_no_tron_tx');
+    verifyTronTx(tx, { owner: addrs.tron, kind: 'lifi', maxCallValue: (from.native ? need : 0n) + (quote.nativeFeeWei * 105n) / 100n });
     return tronBroadcast(keys.tron, tx);
   }
+  verifyLifiEvm(quote, { chainId: netOf(from.net).chainId, amountWei: need, native: from.native });
   const w = new Wallet(toHex(keys.evm), evmProvider(from.net));
   if (!from.native && !quote.skipApproval) {
     const c = new Contract(from.contract, ['function allowance(address,address) view returns (uint256)', 'function approve(address,uint256) returns (bool)'], w);
@@ -144,6 +153,7 @@ export async function lifiExecute(quote, from, keys, addrs, amount) {
   }
   const t = quote.tx;
   const sent = await w.sendTransaction({ to: t.to, data: t.data, value: BigInt(t.value || 0), gasLimit: t.gasLimit ? BigInt(t.gasLimit) : undefined });
+  rememberPending(from.net, sent);
   return sent.hash;
 }
 
@@ -157,13 +167,31 @@ export async function jupQuote(from, to, amount, slippage = 0.005) {
   if (!r.ok || d.error) throw new Error(d.error || 'jup_quote');
   return { out: Number(d.outAmount) / 10 ** to.decimals, min: Number(d.otherAmountThreshold) / 10 ** to.decimals, tool: 'Jupiter', raw: d };
 }
-export async function jupExecute(quote, secret32, address) {
+const JUP_PROGRAMS = new Set(['JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4', 'ComputeBudget111111111111111111111111111111', '11111111111111111111111111111111', 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb', 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL', 'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr']);
+// Проверка транзакции Jupiter до подписи: плательщик — мы, только известные программы, и симуляция не списывает больше суммы обмена
+export async function jupGuard(c, tx, owner, outLamports) {
+  const msg = tx.message;
+  const keys = msg.staticAccountKeys;
+  if (!keys[0].equals(owner)) throw new Error('guard: fee payer mismatch');
+  for (const ix of msg.compiledInstructions) {
+    const pid = keys[ix.programIdIndex]?.toBase58();
+    if (!JUP_PROGRAMS.has(pid)) throw new Error(`guard: unexpected program ${pid}`);
+  }
+  const before = await c.getBalance(owner);
+  const sim = await c.simulateTransaction(tx, { sigVerify: false, replaceRecentBlockhash: true, accounts: { encoding: 'base64', addresses: [owner.toBase58()] } });
+  if (sim.value.err) throw new Error('guard: simulation failed ' + JSON.stringify(sim.value.err).slice(0, 120));
+  const after = sim.value.accounts?.[0]?.lamports;
+  if (after === undefined) throw new Error('guard: simulation returned no balance');
+  if (before - after > outLamports + 5_000_000) throw new Error('guard: transaction would spend more SOL than the swap amount');
+}
+export async function jupExecute(quote, secret32, address, from, amount) {
   const r = await fetch(`${JUP}/swap`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ quoteResponse: quote.raw, userPublicKey: address, wrapAndUnwrapSol: true }) });
   const d = await r.json();
   if (!d.swapTransaction) throw new Error(d.error || 'jup_swap');
-  const tx = VersionedTransaction.deserialize(Uint8Array.from(atob(d.swapTransaction), (c) => c.charCodeAt(0)));
-  tx.sign([Keypair.fromSeed(secret32)]);
+  const tx = VersionedTransaction.deserialize(Uint8Array.from(atob(d.swapTransaction), (x) => x.charCodeAt(0)));
   const c = new Connection(netOf('sol').rpc, 'confirmed');
+  await jupGuard(c, tx, new PublicKey(address), from?.native ? Number(units(amount, 9)) : 0);
+  tx.sign([Keypair.fromSeed(secret32)]);
   return c.sendRawTransaction(tx.serialize(), { skipPreflight: false });
 }
 
@@ -172,7 +200,8 @@ export const LIDO = '0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84';
 export async function lidoStake(evmPriv, amount) {
   const w = new Wallet(toHex(evmPriv), evmProvider('eth'));
   const c = new Contract(LIDO, ['function submit(address) payable returns (uint256)'], w);
-  const tx = await c.submit(ZERO, { value: parseUnits(String(amount), 18) });
+  const tx = await c.submit(ZERO, { value: units(amount, 18) });
+  rememberPending('eth', tx);
   return tx.hash;
 }
 export async function lidoApr() {

@@ -1,0 +1,33 @@
+// Шаблон условий использования. Это не юридическая консультация: перед публичным запуском покажите текст юристу своей юрисдикции.
+export const TERMS = {
+  en: {
+    title: 'Terms of Use & Disclaimer',
+    body: [
+      ['1. What this is', 'Noir Wallet is free, open-source, self-custodial software. It runs entirely in your browser or device. We do not hold, control, or have access to your private keys, seed phrase, passwords, or funds, and we cannot recover, reverse, freeze, or refund anything.'],
+      ['2. You are responsible', 'You alone are responsible for your seed phrase, password, device security, and every transaction you sign. If you lose your seed phrase or password, your funds are lost permanently. Anyone who has your seed phrase controls your funds.'],
+      ['3. No warranty', 'The software is provided "AS IS" and "AS AVAILABLE", without warranties of any kind, express or implied, including merchantability, fitness for a particular purpose, security, accuracy, availability, or non-infringement. The software has not been independently audited and may contain bugs or vulnerabilities.'],
+      ['4. No liability', 'To the maximum extent permitted by law, the authors, contributors, and operators are not liable for any loss of funds, profits, data, or any direct, indirect, incidental, special, or consequential damages arising from the use of, or inability to use, the software, including losses caused by bugs, hacks, third-party services, network failures, wrong addresses, price changes, or user error.'],
+      ['5. Third-party services', 'The wallet connects to third-party services (blockchain nodes, price feeds, swap aggregators such as LI.FI and Jupiter, staking protocols such as Lido, explorers, icon hosts). We do not control them and are not responsible for their availability, prices, fees, security, or conduct. Swaps and staking involve smart-contract, liquidity, slippage, and counterparty risk. Those services can see your IP address and public addresses.'],
+      ['6. Not advice', 'Nothing in the software is financial, investment, legal, or tax advice. Crypto assets are volatile and you may lose all of their value. You are responsible for your own taxes and for complying with the laws that apply to you, including sanctions and anti-money-laundering rules. Do not use the software where it is prohibited.'],
+      ['7. Irreversible transactions', 'Blockchain transactions are final. Always verify the full recipient address, network, token, and amount before confirming. Sending to a wrong address or network may cause permanent loss.'],
+      ['8. Privacy', 'We do not run a server that collects your data. Your encrypted wallet and settings are stored locally on your device. Browser storage can be erased by you, your browser, or the system; back up your seed phrase offline.'],
+      ['9. Changes', 'The software and these terms may change at any time. Continued use means you accept the current terms.'],
+      ['10. Contact & law', 'Questions: see the project repository. Governing law and venue: the jurisdiction of the operator, to the extent permitted by mandatory law of your country.'],
+    ],
+  },
+  ru: {
+    title: 'Условия использования и отказ от ответственности',
+    body: [
+      ['1. Что это', 'Noir Wallet — бесплатное программное обеспечение с открытым кодом, где ключи хранит сам пользователь. Оно работает целиком в вашем браузере или на устройстве. Мы не храним ваши приватные ключи, seed-фразу, пароли и средства, не имеем к ним доступа и не можем восстановить, отменить, заморозить или вернуть что-либо.'],
+      ['2. Ответственность пользователя', 'Только вы отвечаете за seed-фразу, пароль, безопасность устройства и каждую подписанную транзакцию. Потеряв seed-фразу или пароль, вы навсегда потеряете средства. Любой, у кого есть ваша seed-фраза, управляет вашими средствами.'],
+      ['3. Без гарантий', 'Программа предоставляется «КАК ЕСТЬ» и «ПО МЕРЕ ДОСТУПНОСТИ», без каких-либо гарантий, явных или подразумеваемых, включая пригодность для конкретной цели, безопасность, точность, доступность и отсутствие нарушений прав. Программа не проходила независимый аудит и может содержать ошибки и уязвимости.'],
+      ['4. Отсутствие ответственности', 'В максимальной степени, разрешённой законом, авторы, участники разработки и операторы не несут ответственности за потерю средств, прибыли, данных и за любой прямой, косвенный, случайный или иной ущерб, возникший из-за использования программы или невозможности её использовать, включая убытки из-за ошибок, взломов, сторонних сервисов, сбоев сети, неверных адресов, изменения цен и действий пользователя.'],
+      ['5. Сторонние сервисы', 'Кошелёк обращается к сторонним сервисам (блокчейн-узлы, источники цен, агрегаторы обмена LI.FI и Jupiter, протоколы стейкинга вроде Lido, обозреватели, хостинги иконок). Мы не контролируем их и не отвечаем за их доступность, курсы, комиссии, безопасность и действия. Обмен и стейкинг несут риски смарт-контрактов, ликвидности, проскальзывания и контрагентов. Эти сервисы видят ваш IP-адрес и публичные адреса.'],
+      ['6. Не является советом', 'Ничто в программе не является финансовой, инвестиционной, юридической или налоговой консультацией. Криптоактивы волатильны, вы можете потерять всю их стоимость. Вы сами отвечаете за налоги и соблюдение применимого к вам законодательства, включая санкции и меры против отмывания денег. Не используйте программу там, где это запрещено.'],
+      ['7. Необратимость транзакций', 'Транзакции в блокчейне окончательны. Всегда проверяйте адрес получателя целиком, сеть, токен и сумму перед подтверждением. Отправка на неверный адрес или в неверную сеть может привести к безвозвратной потере.'],
+      ['8. Конфиденциальность', 'У нас нет сервера, который собирает ваши данные. Зашифрованный кошелёк и настройки хранятся локально на вашем устройстве. Хранилище браузера может быть очищено вами, браузером или системой, поэтому храните seed-фразу на бумаге.'],
+      ['9. Изменения', 'Программа и эти условия могут измениться в любой момент. Продолжая использование, вы принимаете действующую версию условий.'],
+      ['10. Контакты и право', 'Вопросы: см. репозиторий проекта. Применимое право и подсудность: юрисдикция оператора в пределах, допускаемых императивными нормами права вашей страны.'],
+    ],
+  },
+};

@@ -6,6 +6,8 @@ import { netOf, assetId, tag, label } from '../core/assets.js';
 import { explorerTx } from '../core/chains.js';
 import { lifiQuote, lifiExecute, jupQuote, jupExecute, lidoStake, lidoApr, getMarket } from '../core/market.js';
 import { hasVault, unlockVault, saveVault } from '../core/vault.js';
+import { TermsSheet } from './auth.js';
+import { bioAvailable, bioEnabled, bioEnable, bioDisable } from '../core/bio.js';
 
 // ---------------- ОБМЕН ----------------
 // Маршруты: Solana↔Solana — Jupiter; EVM↔EVM, EVM↔Tron — LI.FI (в Tron из Tron нельзя). Остальное не поддерживается.
@@ -58,7 +60,7 @@ export function Swap() {
       if (isDemo()) { await new Promise((r) => setTimeout(r, 900)); setDone('demo'); }
       else {
         const k = await currentKeys();
-        setDone(route === 'lifi' ? await lifiExecute(q, from, k, addrs, amount) : await jupExecute(q, k.sol, addrs.sol));
+        setDone(route === 'lifi' ? await lifiExecute(q, from, k, addrs, amount) : await jupExecute(q, k.sol, addrs.sol, from, amount));
         setTimeout(refresh, 5000);
       }
     } catch (e) { setErr(e.shortMessage || e.message); }
@@ -124,7 +126,7 @@ export function NftTab() {
   return html`<div class="tab"><h2>${t('nftTitle')}</h2>
     ${err === 'key' && html`<p class="dim">${t('nftNeedKey')}</p>`}
     ${items && !items.length && html`<p class="dim">${t('nftEmpty')}</p>`}
-    <div class="grid">${(items || []).map((x) => html`<div class="nft glass"><div class="nft-img" style=${x.img ? `background-image:url(${x.img})` : `background:${x.c}`}/><b>${x.n}</b></div>`)}</div><div style="height:110px"/></div>`;
+    <div class="grid">${(items || []).map((x) => html`<div class="nft glass">${x.img ? html`<img class="nft-img" src=${x.img} loading="lazy" referrerpolicy="no-referrer" alt=""/>` : html`<div class="nft-img" style=${`background:${x.c}`}/>`}<b>${x.n}</b></div>`)}</div><div style="height:110px"/></div>`;
 }
 
 // ---------------- РЫНОК ----------------
@@ -169,6 +171,9 @@ const SRow = ({ ic, label, hint, right, onClick, danger }) => {
 export function SettingsTab() {
   const s = state.s;
   const [sheet, setSheet] = useState(null);
+  const [bioOk, setBioOk] = useState(false), [bioOn, setBioOn] = useState(bioEnabled());
+  useEffect(() => { bioAvailable().then(setBioOk); }, []);
+  const toggleBio = async (v) => { try { if (v) await bioEnable(state.mnemonic); else bioDisable(); setBioOn(v); } catch { toast(t('bioFail')); } };
   const goReal = () => (hasVault() ? resetTo('unlock') : push('setPass', { mode: 'create' }));
   const real = s.mode === 'real' && state.addrs;
   const addr = real ? state.addrs.evm : null;
@@ -188,6 +193,7 @@ export function SettingsTab() {
 
     <${Group} title=${t('secSecurity')}>
       <${SRow} ic="lock" label=${t('autolock')} hint=${s.mode !== 'real' ? t('realOnly') : null} right=${html`<${Seg} value=${s.autolock} options=${[[1, '1'], [5, '5'], [15, '15'], [0, '∞']]} onChange=${(v) => setSettings({ autolock: v })}/>`}/>
+      ${s.mode === 'real' && bioOk && html`<${SRow} ic="eye" label=${t('bio')} hint=${t('bioHint')} right=${html`<${Switch} on=${bioOn} label=${t('bio')} onChange=${toggleBio}/>`}/>`}
       ${s.mode === 'real' && html`<${SRow} ic="key" label=${t('showSeed')} onClick=${() => setSheet('seed')}/><${SRow} ic="lock" label=${t('changePass')} onClick=${() => setSheet('pass')}/><${SRow} ic="close" label=${t('lock')} onClick=${lock}/>`}
     <//>
 
@@ -198,19 +204,22 @@ export function SettingsTab() {
     <//>
 
     ${hasVault() && html`<${Group} title=${t('secDanger')}><${SRow} danger ic="close" label=${t('resetWallet')} onClick=${() => { if (confirm(t('resetWarn'))) resetWallet(); }}/><//>`}
-    <p class="dim small about">${t('aboutText')}</p><div style="height:110px"/>
+    <p class="dim small about">${t('aboutText')}</p>
+    <button class="link tiny" style="margin:6px 6px 0" onClick=${() => setSheet('terms')}>${t('termsLink')}</button>
+    <p class="dim tiny2">${t('build')}: ${typeof BUILD_ID !== 'undefined' ? BUILD_ID : 'dev'}</p><div style="height:110px"/>
     ${sheet === 'book' && html`<${BookSheet} onClose=${() => setSheet(null)}/>`}
     ${sheet === 'token' && html`<${TokenSheet} onClose=${() => setSheet(null)}/>`}
     ${sheet === 'alchemy' && html`<${KeySheet} onClose=${() => setSheet(null)}/>`}
     ${sheet === 'seed' && html`<${SeedSheet} onClose=${() => setSheet(null)}/>`}
     ${sheet === 'pass' && html`<${PassSheet} onClose=${() => setSheet(null)}/>`}
+    ${sheet === 'terms' && html`<${TermsSheet} onClose=${() => setSheet(null)}/>`}
   </div>`;
 }
 
 const PassSheet = ({ onClose }) => {
   const [o, setO] = useState(''), [n, setN] = useState(''), [n2, setN2] = useState(''), [err, setErr] = useState(''), [busy, setBusy] = useState(false);
   const go = async () => {
-    if (n.length < 8) return setErr(t('passShort'));
+    if (n.length < 10) return setErr(t('passShort'));
     if (n !== n2) return setErr(t('passMismatch'));
     setBusy(true);
     try { const { mnemonic } = await unlockVault(o); await saveVault(n, { mnemonic }); toast(t('passChanged')); onClose(); }

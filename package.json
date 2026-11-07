@@ -6,9 +6,10 @@
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
-    "test": "node --test test/derive.test.mjs",
+    "test": "node --test test/derive.test.mjs test/guard.test.mjs",
     "serve": "node server/server.mjs",
-    "shots": "node test/shots.mjs"
+    "shots": "node test/shots.mjs",
+    "test:live": "node --test test/live.test.mjs"
   },
   "dependencies": {
     "@noble/curves": "^1.6.0",
