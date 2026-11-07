@@ -33,7 +33,10 @@ jobs:
           fi
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Проверка подписей npm-пакетов
-        run: npm audit signatures
+        run: |
+          npm audit signatures > sig.log 2>&1; code=$?
+          head -12 sig.log | while IFS= read -r l; do echo "::notice title=signatures::$(echo "$l" | cut -c1-250)"; done
+          exit $code
         continue-on-error: true
       - name: Известные уязвимости зависимостей (production)
         run: |
