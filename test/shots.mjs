@@ -77,5 +77,5 @@ await step('accounts', async () => {
   await p.locator('.row.acc').nth(0).click(); await p.fill('input[type=password]', 'testpass123'); await p.click('.btn.primary'); await p.waitForSelector('.home .big', { timeout: 15000 });
 });
 await b.close(); srv.kill();
-if (errors.length) { console.error('ОШИБКИ:\n' + errors.join('\n')); process.exit(1); }
+if (errors.length) { console.error('ОШИБКИ:\n' + errors.join('\n')); console.log('::error title=ui-smoke::' + errors.join(' ;; ').replace(/\n/g, ' ')); process.exit(1); }
 console.log('ui smoke ok');
