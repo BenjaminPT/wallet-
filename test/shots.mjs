@@ -58,7 +58,9 @@ await step('tabs', async () => {
   await p.click('button:text-is("Светлая")');
   const href = await p.getAttribute('link[rel=icon]', 'href');
   if (!/icon-light\.svg/.test(href)) throw new Error('иконка не переключилась: ' + href);
-  await p.click('button:text-is("Тёмная")'); await tab(0);
+  await p.click('button:text-is("Тёмная")');
+  await p.click('[aria-label="Баланс"]'); await tab(0); await p.waitForSelector('.wd-strip'); await shot('11b-widgets');
+  if ((await p.locator('.wd').count()) < 2) throw new Error('виджеты не показались');
 });
 await step('unlock', async () => {
   await p.reload(); await p.waitForSelector('input[type=password]'); await shot('12-unlock');

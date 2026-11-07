@@ -39,6 +39,7 @@ export const Icon = ({ n, s = 22, w = 1.8 }) => html`<svg viewBox="0 0 24 24" wi
 export function Coin({ a, s = 40 }) {
   const urls = iconUrls(a);
   const [i, setI] = useState(0);
+  useEffect(() => setI(0), [a.img]);
   const [bad, setBad] = useState(false);
   const net = a.net || a.id;
   const showBadge = a.contract || ['bsc', 'pol', 'arb', 'opt', 'base'].includes(net);

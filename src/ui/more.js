@@ -6,6 +6,7 @@ import { netOf, assetId, tag, label } from '../core/assets.js';
 import { explorerTx } from '../core/chains.js';
 import { lifiQuote, lifiExecute, jupQuote, jupExecute, lidoStake, lidoApr, getMarket, getIconMap } from '../core/market.js';
 import { Avatar } from './accounts.js';
+import { WIDGET_IDS } from './widgets.js';
 import { getAccount, unlockAccount, changeAccountPassword, renameAccount, listAccounts } from '../core/accounts.js';
 import { TermsSheet } from './auth.js';
 import { bioAvailable, bioEnabled, bioEnable, bioDisable } from '../core/bio.js';
@@ -186,6 +187,10 @@ export function SettingsTab() {
       <${SRow} ic="market" label=${t('currency')} right=${html`<${Seg} value=${s.fiat} options=${[['usd', 'USD'], ['eur', 'EUR'], ['rub', 'RUB']]} onChange=${(v) => setSettings({ fiat: v })}/>`}/>
       <${SRow} ic="eye" label=${t('appIcon')} right=${html`<${Seg} value=${s.icon || 'dark'} options=${[['dark', t('iconDark')], ['light', t('iconLight')]]} onChange=${(v) => setSettings({ icon: v })}/>`}/>
       <${SRow} ic="swap" label=${t('testnets')} right=${html`<${Switch} on=${s.testnets} label=${t('testnets')} onChange=${(v) => setSettings({ testnets: v })}/>`}/>
+    <//>
+
+    <${Group} title=${t('widgetsTitle')}>
+      ${WIDGET_IDS.map((w) => html`<${SRow} ic=${w === 'rates' ? 'market' : w === 'chart' ? 'market' : 'user'} label=${t('wd_' + w)} right=${html`<${Switch} on=${(s.widgets || []).includes(w)} label=${t('wd_' + w)} onChange=${(v) => setSettings({ widgets: v ? [...(s.widgets || []), w] : (s.widgets || []).filter((x) => x !== w) })}/>`}/>`)}
     <//>
 
     <${Group} title=${t('secSecurity')}>

@@ -179,3 +179,11 @@ body.sheet-open .tabbar{transform:translateY(140%);opacity:0;pointer-events:none
 .beta-note{margin:-4px 0 6px}
 .mark{display:block}
 @media (prefers-reduced-motion:reduce){.acc-btn,.cswatch{transition:none}}
+
+.wd-strip{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;margin:4px -20px 8px;padding:0 20px 6px;scrollbar-width:none}
+.wd-strip::-webkit-scrollbar{display:none}
+.wd-item{flex:0 0 78%;scroll-snap-align:start}
+.wd{border-radius:22px;padding:14px 16px;min-height:132px;display:flex;flex-direction:column;gap:6px}
+.wd-big{font-size:28px;font-weight:700;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
+.wd-row{display:flex;align-items:center;gap:8px;font-size:14px;font-variant-numeric:tabular-nums}.wd-row .grow{flex:1}
+.wd-rates{gap:5px}

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { AccountButton, BioOffer } from './accounts.js';
 import { Mark } from './mark.js';
+import { Widgets } from './widgets.js';
 import { getAccount } from '../core/accounts.js';
 import { html, Icon, Coin, Screen, Btn, Sheet, Chart, Keypad, QR, Scanner, fmtFiat, fmtNum, short, pct, ago, copyText, haptic } from './common.js';
 import { t } from '../i18n.js';
@@ -41,6 +42,7 @@ export function Home() {
     <div class="list">${list.map((a) => html`<button class="row glass" key=${assetId(a)} onClick=${() => push('asset', { id: assetId(a) })}>
       <${Coin} a=${a}/><div class="grow-l"><b>${a.sym}</b><span class="dim">${tag(a)}</span></div>
       <div class="right"><b>${fmtFiat(valueOf(a))}</b><span class=${changeOf(a) >= 0 ? 'up' : 'down'}>${fmtNum(balanceOf(a))} · ${pct(changeOf(a))}</span></div></button>`)}</div>
+    <${Widgets}/>
     <h3>${t('activity')}</h3>
     <${PendingList}/>
     <div class="list">${state.txs.length ? state.txs.slice(0, 8).map((x) => html`<a class="row glass" key=${x.id} href=${explorerTx(x.net, x.id)} target="_blank" rel="noopener">

@@ -4,7 +4,7 @@ import { html, Icon } from './ui/common.js';
 import { Onboarding, SetPass, Seed, Verify, Import, Unlock, Accounts } from './ui/auth.js';
 import { Home, AssetPage, SendPick, ReceivePick, Receive, Send } from './ui/wallet.js';
 import { Swap, Stake, NftTab, MarketTab, SettingsTab } from './ui/more.js';
-import { useStore, init, setSettings } from './store.js';
+import { useStore, init, setSettings, takeDeeplink, push } from './store.js';
 import { t } from './i18n.js';
 
 const SCREENS = { onboarding: Onboarding, setPass: SetPass, seed: Seed, verify: Verify, import: Import, unlock: Unlock, accounts: Accounts, asset: AssetPage, send: Send, receive: Receive, swap: Swap, stake: Stake };
@@ -23,6 +23,11 @@ function App() {
   const [tab, setTab] = useState('home');
   const top = s.stack[s.stack.length - 1];
   useEffect(() => { document.documentElement.lang = s.s.lang; }, [s.s.lang]);
+  useEffect(() => {
+    if (top?.name !== 'home' || !s.deeplink) return;
+    const d = takeDeeplink();
+    if (d === 'market') setTab('market'); else if (d === 'send') push('sendPick'); else if (d === 'receive') push('receivePick');
+  }, [top?.name, s.deeplink]);
   const AUTH = ['onboarding', 'setPass', 'seed', 'verify', 'import', 'unlock', 'accounts'];
   useEffect(() => { if (top && AUTH.includes(top.name)) setTab('home'); }, [top?.name]);
   if (!top) return null;

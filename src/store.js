@@ -8,7 +8,7 @@ import { setLang, detectLang, t } from './i18n.js';
 import { bioUnlock, bioDisable, bioMigrate, bioAvailable, bioEnabled } from './core/bio.js';
 
 const SKEY = 'noir.settings.v1';
-const defaults = { lang: detectLang(), fiat: 'usd', mode: 'real', icon: 'dark', testnets: false, autolock: 5, onboarded: false, coached: false, book: [], custom: [], alchemy: '' };
+const defaults = { lang: detectLang(), fiat: 'usd', mode: 'real', icon: 'dark', widgets: ['rates'], testnets: false, autolock: 5, onboarded: false, coached: false, book: [], custom: [], alchemy: '' };
 const load = () => { try { return { ...defaults, ...JSON.parse(localStorage.getItem(SKEY)), mode: 'real' }; } catch { return { ...defaults }; } };
 
 const S = {
@@ -77,6 +77,7 @@ function armLock() {
 document.addEventListener?.('visibilitychange', () => { if (document.hidden && S.s.mode === 'real' && S.s.autolock === 0) lock(); });
 
 export function init() {
+  S.deeplink = (location.hash || '').replace('#', '');
   applyIcon();
   const mid = migrateLegacy(t('mainAccount')); if (mid) bioMigrate(mid);
   syncAccounts();
@@ -230,3 +231,6 @@ export async function pollPending() {
   S.pending = await refreshPending(); emit();
 }
 setInterval(pollPending, 10000);
+
+// Ярлыки с иконки (#send, #receive, #market): применяются после входа, когда открыт главный экран
+export const takeDeeplink = () => { const d = S.deeplink; S.deeplink = ''; try { history.replaceState(null, '', location.pathname); } catch {} return d; };
