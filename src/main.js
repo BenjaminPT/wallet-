@@ -1,13 +1,13 @@
 import { render } from 'preact';
 import { useState, useEffect } from 'preact/hooks';
 import { html, Icon } from './ui/common.js';
-import { Onboarding, SetPass, Seed, Verify, Import, Unlock } from './ui/auth.js';
+import { Onboarding, SetPass, Seed, Verify, Import, Unlock, Accounts } from './ui/auth.js';
 import { Home, AssetPage, SendPick, ReceivePick, Receive, Send } from './ui/wallet.js';
 import { Swap, Stake, NftTab, MarketTab, SettingsTab } from './ui/more.js';
 import { useStore, init, setSettings } from './store.js';
 import { t } from './i18n.js';
 
-const SCREENS = { onboarding: Onboarding, setPass: SetPass, seed: Seed, verify: Verify, import: Import, unlock: Unlock, asset: AssetPage, send: Send, receive: Receive, swap: Swap, stake: Stake };
+const SCREENS = { onboarding: Onboarding, setPass: SetPass, seed: Seed, verify: Verify, import: Import, unlock: Unlock, accounts: Accounts, asset: AssetPage, send: Send, receive: Receive, swap: Swap, stake: Stake };
 const TABS = [['home', 'home'], ['market', 'market'], ['nft', 'nft'], ['settings', 'gear']];
 
 function Coach() {
@@ -24,7 +24,7 @@ function App() {
   const [tab, setTab] = useState('home');
   const top = s.stack[s.stack.length - 1];
   useEffect(() => { document.documentElement.lang = s.s.lang; }, [s.s.lang]);
-  const AUTH = ['onboarding', 'setPass', 'seed', 'verify', 'import', 'unlock'];
+  const AUTH = ['onboarding', 'setPass', 'seed', 'verify', 'import', 'unlock', 'accounts'];
   useEffect(() => { if (top && AUTH.includes(top.name)) setTab('home'); }, [top?.name]);
   if (!top) return null;
   let view;

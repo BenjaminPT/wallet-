@@ -51,7 +51,8 @@ export function Home() {
 
 function PendingList() {
   const [busy, setBusy] = useState('');
-  const l = state.pending.filter((p) => p.status === 'pending' || Date.now() - p.ts < 3600e3).slice(-4).reverse();
+  const me = (state.addrs?.evm || '').toLowerCase();
+  const l = state.pending.filter((p) => (p.from || '').toLowerCase() === me).filter((p) => p.status === 'pending' || Date.now() - p.ts < 3600e3).slice(-4).reverse();
   if (!l.length || isDemo()) return null;
   const act = async (p, cancel) => { setBusy(p.hash + cancel); try { await bump(p, cancel); toast(t('sent')); } catch (e) { toast((e.shortMessage || e.message).slice(0, 60)); } setBusy(''); };
   return html`<div class="list pend">${l.map((p) => html`<div class="row glass" key=${p.hash}>

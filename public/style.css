@@ -158,3 +158,9 @@ body.sheet-open .tabbar{transform:translateY(140%);opacity:0;pointer-events:none
 .terms{margin-bottom:12px}.terms b{font-size:15px}.terms p{margin:4px 0 0;font-size:14px;line-height:1.5}
 .tiny2{font-size:12px;margin:2px 6px 0}
 .pend{margin-bottom:10px}.dir.wait{color:#fff}.dir .spin{width:18px;height:18px;border-width:2px}.pbtns{display:flex;gap:6px}.mini{padding:8px 12px;border-radius:999px;background:rgba(255,255,255,.12);font-size:13px;font-weight:600;min-height:36px;transition:transform .15s var(--ease-out)}.mini:active{transform:scale(.95)}.mini:disabled{opacity:.4}
+
+/* accounts */
+.onb-links{display:flex;gap:18px;align-items:center}
+.link.signin{font-weight:600;color:#fff}
+.row.acc{width:100%;text-align:left;cursor:pointer}
+.row.acc.cur{border-color:rgba(255,255,255,.35)}

@@ -3,8 +3,11 @@ import { html, Icon, Screen, Btn, Sheet, haptic } from './common.js';
 import { TERMS } from '../legal.js';
 import { getLang } from '../i18n.js';
 import { t } from '../i18n.js';
-import { push, pop, enterDemo, createVault, unlock, unlockBiometric, setSettings, resetTo, state } from '../store.js';
+import { push, pop, enterDemo, createVault, unlock, unlockBiometric, switchAccount, isUnlocked, hasAccounts, setSettings, resetTo, state } from '../store.js';
 import { bioEnabled, bioAvailable } from '../core/bio.js';
+import { listAccounts, getAccount } from '../core/accounts.js';
+const short = (a) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : '');
+const signIn = () => push(hasAccounts() ? 'accounts' : 'import');
 import { useEffect } from 'preact/hooks';
 import { newMnemonic, isValidMnemonic, normalize } from '../core/vault.js';
 
@@ -13,13 +16,13 @@ export function Onboarding() {
   const slides = [1, 2, 3, 4];
   const last = i === 3;
   return html`<div class="screen onb">
-    <div class="onb-top"><b>noir</b>${!last && html`<button class="link" onClick=${() => setI(3)}>${t('skip')}</button>`}</div>
+    <div class="onb-top"><b>noir</b><span class="onb-links">${!last && html`<button class="link" onClick=${() => setI(3)}>${t('skip')}</button>`}<button class="link signin" onClick=${signIn}>${t('signIn')}</button></span></div>
     <div class="onb-art" key=${i}><div class="ring r1"/><div class="ring r2"/><div class="ring r3"/><div class="onb-ic"><${Icon} n=${['globe', 'key', 'lock', 'eye'][i]} s=${54} w=${1.4}/></div></div>
     <div class="onb-txt" key=${'t' + i}><h1>${t(`ob${i + 1}t`)}</h1><p class="dim">${t(`ob${i + 1}d`)}</p></div>
     <div class="onb-bot">
       <div class="bars">${slides.map((s, k) => html`<i class=${k <= i ? 'on' : ''}/>`)}</div>
       ${last
-        ? html`<${Btn} onClick=${() => push('setPass', { mode: 'create' })}>${t('createWallet')}<//><${Btn} kind="ghost" onClick=${() => push('import')}>${t('importWallet')}<//><button class="link center" onClick=${enterDemo}>${t('tryDemo')}</button>`
+        ? html`<${Btn} onClick=${() => push('setPass', { mode: 'create' })}>${t('createWallet')}<//><${Btn} kind="ghost" onClick=${signIn}>${t('signInFull')}<//><button class="link center" onClick=${enterDemo}>${t('tryDemo')}</button>`
         : html`<${Btn} onClick=${() => { haptic(); setI(i + 1); }}>${t('next')}<//>`}
     </div>
   </div>`;
@@ -37,7 +40,7 @@ export function SetPass({ mode, mnemonic }) {
   const go = async () => {
     if (p.length < 10) return setErr(t('passShort'));
     if (p !== p2) return setErr(t('passMismatch'));
-    if (mode === 'import') { setBusy(true); await createVault(mnemonic, p); return; }
+    if (mode === 'import') { setBusy(true); try { await createVault(mnemonic, p); } catch (e) { setErr(e.message === 'duplicate_account' ? t('dupAccount') : t('bioFail')); setBusy(false); } return; }
     push('seed', { password: p, mnemonic: newMnemonic(12) });
   };
   return html`<${Screen} title=${t('setPass')}>
@@ -69,7 +72,7 @@ export function Verify({ mnemonic, password }) {
   const [idx] = useState(() => { const s = new Set(); while (s.size < 3) s.add(Math.floor(Math.random() * w.length)); return [...s].sort((a, b) => a - b); });
   const [v, setV] = useState(['', '', '']), [err, setErr] = useState(''), [busy, setBusy] = useState(false);
   const go = async () => {
-    if (idx.every((k, n) => v[n].trim().toLowerCase() === w[k])) { setBusy(true); await createVault(mnemonic, password); }
+    if (idx.every((k, n) => v[n].trim().toLowerCase() === w[k])) { setBusy(true); try { await createVault(mnemonic, password); } catch (e) { setErr(e.message === 'duplicate_account' ? t('dupAccount') : String(e.message)); setBusy(false); } }
     else setErr(t('wrong'));
   };
   return html`<${Screen} title=${t('verifyTitle')}>
@@ -91,23 +94,40 @@ export function Import() {
   <//>`;
 }
 
+export function Accounts() {
+  const list = listAccounts(), act = state.account;
+  const first = state.stack.length < 2;
+  return html`<${Screen} title=${t('accountsTitle')} onBack=${first ? false : undefined}>
+    ${!list.length && html`<p class="dim">${t('noAccounts')}</p>`}
+    <div class="list">${list.map((a) => html`<button class=${`row glass acc${a.id === act ? ' cur' : ''}`} key=${a.id} onClick=${() => { haptic(); switchAccount(a.id); }}>
+      <span class="prof-av"><${Icon} n=${isUnlocked(a.id) ? 'check' : 'lock'} s=${20}/></span>
+      <div class="grow-l"><b>${a.name}</b><span class="dim small mono">${short(a.addr) || '—'}</span></div>
+      <span class="dim small">${a.id === act ? t('active') : isUnlocked(a.id) ? t('unlockedLbl') : ''}</span></button>`)}</div>
+    <div class="grow"/>
+    <${Btn} onClick=${() => push('setPass', { mode: 'create' })}>${t('addAccountNew')}<//>
+    <${Btn} kind="ghost" onClick=${() => push('import')}>${t('signInFull')}<//>
+  <//>`;
+}
+
 export function Unlock() {
+  const id = state.account, acc = getAccount(id);
   const [p, setP] = useState(''), [err, setErr] = useState(''), [busy, setBusy] = useState(false), [bio, setBio] = useState(false);
-  useEffect(() => { if (bioEnabled()) bioAvailable().then(setBio); }, []);
-  const goBio = async () => { setErr(''); try { await unlockBiometric(); } catch { setErr(t('bioFail')); } };
+  useEffect(() => { if (bioEnabled(id)) bioAvailable().then(setBio); }, [id]);
+  const goBio = async () => { setErr(''); try { await unlockBiometric(id); } catch { setErr(t('bioFail')); } };
   const go = async () => {
     setBusy(true); setErr('');
-    try { await unlock(p); } catch (e) { const m = /locked_out:(\d+)/.exec(e.message); setErr(m ? t('lockedOut', { s: m[1] }) : t('wrongPass')); setBusy(false); }
+    try { await unlock(p, id); } catch (e) { const m = /locked_out:(\d+)/.exec(e.message); setErr(m ? t('lockedOut', { s: m[1] }) : t('wrongPass')); setBusy(false); }
   };
   return html`<div class="screen onb">
     <div class="onb-top"><b>noir</b></div>
     <div class="onb-art"><div class="ring r1"/><div class="ring r2"/><div class="ring r3"/><div class="onb-ic"><${Icon} n="lock" s=${54} w=${1.4}/></div></div>
-    <div class="onb-txt"><h1>${t('unlockTitle')}</h1></div>
+    <div class="onb-txt"><h1>${t('unlockTitle')}</h1>${acc && html`<p class="dim mono">${acc.name} · ${short(acc.addr)}</p>`}</div>
     <div class="onb-bot">
       <input class="field glass" type="password" autocomplete="current-password" placeholder=${t('pass')} value=${p} onInput=${(e) => { setP(e.target.value); setErr(''); }} onKeyDown=${(e) => e.key === 'Enter' && go()}/>
       ${err && html`<p class="err">${err}</p>`}
       <${Btn} onClick=${go} busy=${busy} disabled=${!p}>${t('unlock')}<//>
       ${bio && html`<${Btn} kind="ghost" onClick=${goBio}>${t('bioUnlock')}<//>`}
+      <button class="link center" onClick=${() => push('accounts')}>${t('switchAccount')}</button>
       <button class="link center" onClick=${enterDemo}>${t('tryDemo')}</button>
     </div>
   </div>`;

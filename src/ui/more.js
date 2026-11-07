@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { html, Icon, Coin, Screen, Btn, Sheet, fmtFiat, fmtNum, short, pct, copyText, haptic } from './common.js';
 import { t } from '../i18n.js';
-import { state, push, pop, assets, balanceOf, priceOf, isDemo, currentKeys, toast, setSettings, refresh, lock, resetWallet, resetTo, enterDemo, addrFor } from '../store.js';
+import { state, push, pop, assets, balanceOf, priceOf, isDemo, currentKeys, toast, setSettings, refresh, lock, logout, deleteAccount, hasAccounts, resetTo, enterDemo, addrFor } from '../store.js';
 import { netOf, assetId, tag, label } from '../core/assets.js';
 import { explorerTx } from '../core/chains.js';
 import { lifiQuote, lifiExecute, jupQuote, jupExecute, lidoStake, lidoApr, getMarket } from '../core/market.js';
-import { hasVault, unlockVault, saveVault } from '../core/vault.js';
+import { getAccount, unlockAccount, changeAccountPassword, renameAccount, listAccounts } from '../core/accounts.js';
 import { TermsSheet } from './auth.js';
 import { bioAvailable, bioEnabled, bioEnable, bioDisable } from '../core/bio.js';
 
@@ -171,16 +171,17 @@ const SRow = ({ ic, label, hint, right, onClick, danger }) => {
 export function SettingsTab() {
   const s = state.s;
   const [sheet, setSheet] = useState(null);
-  const [bioOk, setBioOk] = useState(false), [bioOn, setBioOn] = useState(bioEnabled());
+  const [bioOk, setBioOk] = useState(false), [, force] = useState(0);
+  const acc = getAccount(state.account), bioOn = bioEnabled(state.account);
   useEffect(() => { bioAvailable().then(setBioOk); }, []);
-  const toggleBio = async (v) => { try { if (v) await bioEnable(state.mnemonic); else bioDisable(); setBioOn(v); } catch { toast(t('bioFail')); } };
-  const goReal = () => (hasVault() ? resetTo('unlock') : push('setPass', { mode: 'create' }));
+  const toggleBio = async (v) => { if (!bioOk) return toast(t('bioUnsupported')); try { if (v) { await bioEnable(state.account, state.mnemonic, acc?.name); toast(t('bioOnToast')); } else bioDisable(state.account); force((n) => n + 1); } catch { toast(t('bioFail')); } };
+  const goReal = () => (hasAccounts() ? push('accounts') : push('setPass', { mode: 'create' }));
   const real = s.mode === 'real' && state.addrs;
   const addr = real ? state.addrs.evm : null;
   return html`<div class="tab set-tab"><h2>${t('settings')}</h2>
     <div class="prof glass">
       <div class="prof-av">${real ? html`<${Icon} n="lock" s=${22}/>` : html`<${Icon} n="eye" s=${22}/>`}</div>
-      <div class="grow-l"><b>${real ? 'Noir Wallet' : t('modeDemo')}</b><span class="dim small mono">${real ? short(addr) : t('needRealWallet')}</span></div>
+      <div class="grow-l"><b>${real ? (acc?.name || 'Noir Wallet') : t('modeDemo')}</b><span class="dim small mono">${real ? short(addr) : t('needRealWallet')}</span></div>
       ${real && html`<button class="icon-btn" aria-label=${t('copy')} onClick=${async () => { await copyText(addr); toast(t('copied')); }}><${Icon} n="copy" s=${18}/></button>`}
     </div>
     <${Seg} value=${s.mode} options=${[['demo', t('modeDemo')], ['real', t('modeReal')]]} onChange=${(v) => (v === 'demo' ? enterDemo() : s.mode !== 'real' && goReal())}/>
@@ -193,8 +194,14 @@ export function SettingsTab() {
 
     <${Group} title=${t('secSecurity')}>
       <${SRow} ic="lock" label=${t('autolock')} hint=${s.mode !== 'real' ? t('realOnly') : null} right=${html`<${Seg} value=${s.autolock} options=${[[1, '1'], [5, '5'], [15, '15'], [0, '∞']]} onChange=${(v) => setSettings({ autolock: v })}/>`}/>
-      ${s.mode === 'real' && bioOk && html`<${SRow} ic="eye" label=${t('bio')} hint=${t('bioHint')} right=${html`<${Switch} on=${bioOn} label=${t('bio')} onChange=${toggleBio}/>`}/>`}
+      ${s.mode === 'real' && html`<${SRow} ic="eye" label=${t('bio')} hint=${bioOk ? t('bioHint') : t('bioUnsupported')} right=${html`<${Switch} on=${bioOn} label=${t('bio')} onChange=${toggleBio}/>`}/>`}
       ${s.mode === 'real' && html`<${SRow} ic="key" label=${t('showSeed')} onClick=${() => setSheet('seed')}/><${SRow} ic="lock" label=${t('changePass')} onClick=${() => setSheet('pass')}/><${SRow} ic="close" label=${t('lock')} onClick=${lock}/>`}
+    <//>
+
+    <${Group} title=${t('accountsTitle')}>
+      <${SRow} ic="user" label=${t('switchAccount')} hint=${acc ? `${listAccounts().length} · ${acc.name}` : null} onClick=${() => push('accounts')}/>
+      ${!hasAccounts() && html`<${SRow} ic="plus" label=${t('signInFull')} onClick=${() => push('import')}/>`}
+      ${real && html`<${SRow} ic="plus" label=${t('addAccountNew')} onClick=${() => push('setPass', { mode: 'create' })}/><${SRow} ic="key" label=${t('rename')} onClick=${() => { const n = (prompt(t('renamePrompt'), acc?.name || '') || '').trim(); if (n) { renameAccount(state.account, n.slice(0, 24)); force((x) => x + 1); } }}/><${SRow} ic="close" label=${t('logout')} onClick=${() => logout()}/>`}
     <//>
 
     <${Group} title=${t('secData')}>
@@ -203,7 +210,7 @@ export function SettingsTab() {
       <${SRow} ic="nft" label=${t('alchemyKey')} right=${html`<span class="dim">${s.alchemy ? '••••' : ''}</span>`} onClick=${() => setSheet('alchemy')}/>
     <//>
 
-    ${hasVault() && html`<${Group} title=${t('secDanger')}><${SRow} danger ic="close" label=${t('resetWallet')} onClick=${() => { if (confirm(t('resetWarn'))) resetWallet(); }}/><//>`}
+    ${real && html`<${Group} title=${t('secDanger')}><${SRow} danger ic="close" label=${t('resetWallet')} onClick=${() => { if (confirm(t('resetWarn'))) deleteAccount(); }}/><//>`}
     <p class="dim small about">${t('aboutText')}</p>
     <button class="link tiny" style="margin:6px 6px 0" onClick=${() => setSheet('terms')}>${t('termsLink')}</button>
     <p class="dim tiny2">${t('build')}: ${typeof BUILD_ID !== 'undefined' ? BUILD_ID : 'dev'}</p><div style="height:110px"/>
@@ -222,7 +229,7 @@ const PassSheet = ({ onClose }) => {
     if (n.length < 10) return setErr(t('passShort'));
     if (n !== n2) return setErr(t('passMismatch'));
     setBusy(true);
-    try { const { mnemonic } = await unlockVault(o); await saveVault(n, { mnemonic }); toast(t('passChanged')); onClose(); }
+    try { await changeAccountPassword(state.account, o, n); toast(t('passChanged')); onClose(); }
     catch { setErr(t('wrongPass')); setBusy(false); }
   };
   return html`<${Sheet} title=${t('changePass')} onClose=${onClose}>
@@ -251,6 +258,6 @@ const TokenSheet = ({ onClose }) => {
 const KeySheet = ({ onClose }) => { const [k, setK] = useState(state.s.alchemy); return html`<${Sheet} title=${t('alchemyKey')} onClose=${onClose}><input class="field glass" value=${k} onInput=${(e) => setK(e.target.value.trim())} placeholder="Alchemy API key"/><${Btn} onClick=${() => { setSettings({ alchemy: k }); onClose(); }}>${t('save')}<//><//>`; };
 const SeedSheet = ({ onClose }) => {
   const [p, setP] = useState(''), [m, setM] = useState(null), [err, setErr] = useState('');
-  const go = async () => { try { setM((await unlockVault(p)).mnemonic); } catch { setErr(t('wrongPass')); } };
+  const go = async () => { try { setM(await unlockAccount(state.account, p)); } catch { setErr(t('wrongPass')); } };
   return html`<${Sheet} title=${t('showSeed')} onClose=${onClose}>${m ? html`<div class="seed glass"><div class="words">${m.split(' ').map((x, i) => html`<div class="w"><i>${i + 1}</i>${x}</div>`)}</div></div>` : html`<input class="field glass" type="password" placeholder=${t('pass')} value=${p} onInput=${(e) => { setP(e.target.value); setErr(''); }}/>${err && html`<p class="err">${err}</p>`}<${Btn} onClick=${go}>${t('confirm')}<//>`}<//>`;
 };
