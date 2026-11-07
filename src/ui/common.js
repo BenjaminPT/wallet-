@@ -65,7 +65,14 @@ export const Btn = ({ children, onClick, kind = 'primary', disabled, busy, ...r 
   html`<button class=${`btn ${kind}`} disabled=${disabled || busy} onClick=${(e) => { haptic(); onClick?.(e); }} ...${r}>${busy ? html`<span class="spin"/>` : children}</button>`;
 
 // ---------- нижний лист ----------
-export const Sheet = ({ title, onClose, children }) => html`
+// Пока открыт нижний лист, нижняя панель вкладок уезжает вниз (иначе она перекрывает кнопки листа);
+// лист закрывается тапом вне окна или крестиком, и панель возвращается.
+let openSheets = 0;
+const useSheetOpen = () => useEffect(() => {
+  openSheets++; document.body.classList.add('sheet-open');
+  return () => { openSheets--; if (!openSheets) document.body.classList.remove('sheet-open'); };
+}, []);
+export const Sheet = ({ title, onClose, children }) => { useSheetOpen(); return html`
   <div class="sheet-wrap" onClick=${onClose}>
     <div class="sheet glass-strong" onClick=${(e) => e.stopPropagation()}>
       <div class="grab"/>
@@ -73,6 +80,7 @@ export const Sheet = ({ title, onClose, children }) => html`
       <div class="sheet-b">${children}</div>
     </div>
   </div>`;
+};
 
 // ---------- график ----------
 export function Chart({ data, h: H = 150, up = true, onCursor }) {
