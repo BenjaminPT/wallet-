@@ -6,7 +6,7 @@ import { netOf } from './assets.js';
 import { toHex } from './derive.js';
 
 const CG = 'https://api.coingecko.com/api/v3';
-const BN = 'https://api.binance.com/api/v3';
+const BN = 'https://data-api.binance.vision/api/v3'; // публичное зеркало рыночных данных Binance (CORS открыт)
 const cache = new Map();
 async function cached(key, ttl, fn) {
   const hit = cache.get(key);
