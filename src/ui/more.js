@@ -9,7 +9,7 @@ import { Avatar } from './accounts.js';
 import { WIDGET_IDS } from './widgets.js';
 import { getAccount, unlockAccount, changeAccountPassword, renameAccount, listAccounts } from '../core/accounts.js';
 import { TermsSheet } from './auth.js';
-import { bioAvailable, bioEnabled, bioEnable, bioDisable } from '../core/bio.js';
+import { bioAvailable, bioEnabled, bioEnable, bioDisable, bioMode } from '../core/bio.js';
 
 // ---------------- ОБМЕН ----------------
 // Маршруты: Solana↔Solana — Jupiter; EVM↔EVM, EVM↔Tron — LI.FI (в Tron из Tron нельзя). Остальное не поддерживается.
@@ -195,7 +195,7 @@ export function SettingsTab() {
 
     <${Group} title=${t('secSecurity')}>
       <${SRow} ic="lock" label=${t('autolock')} right=${html`<${Seg} value=${s.autolock} options=${[[1, '1'], [5, '5'], [15, '15'], [0, '∞']]} onChange=${(v) => setSettings({ autolock: v })}/>`}/>
-      ${real && html`<${SRow} ic="eye" label=${t('bio')} hint=${bioOk ? t('bioHint') : t('bioUnsupported')} right=${html`<${Switch} on=${bioOn} label=${t('bio')} onChange=${toggleBio}/>`}/>`}
+      ${real && html`<${SRow} ic="eye" label=${t('bio')} hint=${!bioOk ? t('bioUnsupported') : bioOn && bioMode(state.account) === 'gate' ? t('bioGate') : t('bioHint')} right=${html`<${Switch} on=${bioOn} label=${t('bio')} onChange=${toggleBio}/>`}/>`}
       ${real && html`<${SRow} ic="key" label=${t('showSeed')} onClick=${() => setSheet('seed')}/><${SRow} ic="lock" label=${t('changePass')} onClick=${() => setSheet('pass')}/><${SRow} ic="close" label=${t('lock')} onClick=${lock}/>`}
     <//>
 
