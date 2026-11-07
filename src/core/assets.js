@@ -68,8 +68,10 @@ const TWF = { eth: 'ethereum', bsc: 'smartchain', pol: 'polygon', arb: 'arbitrum
 export const chainLogo = (net) => `${TW}/${TWF[net] || 'ethereum'}/info/logo.png`;
 export const iconUrls = (a) => {
   const net = a.net || a.id, out = [];
+  if (a.img) out.push(a.img);
   if (a.contract) out.push(`${TW}/${TWF[net]}/assets/${a.contract}/logo.png`);
   else if (net) out.push(chainLogo(a.sym === 'ETH' ? 'eth' : net));
+  if (a.sym && !net) out.push(`https://assets.coincap.io/assets/icons/${a.sym.toLowerCase()}@2x.png`);
   if (a.sym) out.push(`https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@0.18.1/svg/color/${a.sym.toLowerCase()}.svg`);
   return out;
 };

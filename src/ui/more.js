@@ -4,7 +4,7 @@ import { t } from '../i18n.js';
 import { state, push, pop, assets, balanceOf, priceOf, currentKeys, toast, setSettings, refresh, lock, logout, deleteAccount, hasAccounts, resetTo, addrFor } from '../store.js';
 import { netOf, assetId, tag, label } from '../core/assets.js';
 import { explorerTx } from '../core/chains.js';
-import { lifiQuote, lifiExecute, jupQuote, jupExecute, lidoStake, lidoApr, getMarket } from '../core/market.js';
+import { lifiQuote, lifiExecute, jupQuote, jupExecute, lidoStake, lidoApr, getMarket, getIconMap } from '../core/market.js';
 import { Avatar } from './accounts.js';
 import { getAccount, unlockAccount, changeAccountPassword, renameAccount, listAccounts } from '../core/accounts.js';
 import { TermsSheet } from './auth.js';
@@ -130,7 +130,8 @@ export function NftTab() {
 export function MarketTab() {
   const [rows, setRows] = useState(null), [q, setQ] = useState('');
   const prev = useRef({});
-  const [flash, setFlash] = useState({});
+  const [flash, setFlash] = useState({}), [icons, setIcons] = useState({});
+  useEffect(() => { getIconMap().then(setIcons); }, []);
   useEffect(() => {
     let off = false;
     const load = async () => {
@@ -149,7 +150,7 @@ export function MarketTab() {
   const f = (rows || []).filter((r) => (r.name + r.symbol).toLowerCase().includes(q.toLowerCase()));
   return html`<div class="tab"><h2>${t('marketTitle')}<span class="live"><i/>LIVE</span></h2>
     <input class="field glass" placeholder=${t('search')} value=${q} onInput=${(e) => setQ(e.target.value)}/>
-    <div class="list">${f.map((r) => html`<div class="row glass" key=${r.symbol}><${Coin} a=${{ sym: r.symbol.toUpperCase(), color: '#444' }}/><div class="grow-l"><b>${r.symbol.toUpperCase()}</b><span class="dim">${r.name}</span></div><div class="right"><b class=${flash[r.symbol] ? `flash-${flash[r.symbol]}` : ''} key=${r.current_price}>${fmtFiat(r.current_price, r.current_price < 1 ? 4 : 2)}</b><span class=${r.price_change_percentage_24h >= 0 ? 'up' : 'down'}>${pct(r.price_change_percentage_24h)}</span></div></div>`)}</div><div style="height:110px"/></div>`;
+    <div class="list">${f.map((r) => html`<div class="row glass" key=${r.symbol}><${Coin} a=${{ sym: r.symbol.toUpperCase(), color: '#444', img: icons[r.symbol.toUpperCase()] || r.image }}/><div class="grow-l"><b>${r.symbol.toUpperCase()}</b><span class="dim">${r.name}</span></div><div class="right"><b class=${flash[r.symbol] ? `flash-${flash[r.symbol]}` : ''} key=${r.current_price}>${fmtFiat(r.current_price, r.current_price < 1 ? 4 : 2)}</b><span class=${r.price_change_percentage_24h >= 0 ? 'up' : 'down'}>${pct(r.price_change_percentage_24h)}</span></div></div>`)}</div><div style="height:110px"/></div>`;
 }
 
 // ---------------- НАСТРОЙКИ ----------------

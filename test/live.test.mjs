@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { getPrices, getChart, getMarket, lifiQuote, jupQuote, lidoApr, jupGuard, SOL_MINT } from '../src/core/market.js';
+import { getPrices, getChart, getMarket, getIconMap, lifiQuote, jupQuote, lidoApr, jupGuard, SOL_MINT } from '../src/core/market.js';
 import { getBalance, getEvmHistory, getHistory, estimateFee, evmProvider, validateAddress } from '../src/core/chains.js';
 import { assetList, NETS } from '../src/core/assets.js';
 import { verifyTronTx, verifyLifiEvm, LIFI_DIAMOND, LIFI_TRON } from '../src/core/guard.js';
@@ -31,7 +31,9 @@ test('курсы: USD/EUR/RUB в реальном времени', T, async () =
 test('графики и рынок', T, async () => {
   for (const d of [1, 7, 30, 365]) assert.ok((await getChart('bitcoin', d)).length > 30, `chart ${d}`);
   const m = await getMarket('usd');
-  assert.ok(m.length >= 10 && m.some((r) => r.symbol === 'BTC'));
+  assert.ok(m.length >= 40 && m.some((r) => r.symbol === 'BTC'), `market rows: ${m.length}`);
+  const ic = await getIconMap(); const have = m.filter((r) => ic[r.symbol]).length; console.log('иконки:', have, '/', m.length);
+  assert.ok(have / m.length > 0.7, 'иконки доступны для >70% монет');
 });
 test('EVM RPC: все сети отвечают, chainId верный', T, async () => {
   for (const n of Object.values(NETS).filter((x) => x.fam === 'evm')) {

@@ -80,13 +80,16 @@ export function getChart(id, days, fiat = 'usd') {
 }
 
 // Вкладка «Рынок»: топ монет по Binance, обновляется каждые несколько секунд
-const TOP = { BTC: 'Bitcoin', ETH: 'Ethereum', BNB: 'BNB', SOL: 'Solana', XRP: 'XRP', DOGE: 'Dogecoin', TON: 'Toncoin', TRX: 'Tron', ADA: 'Cardano', AVAX: 'Avalanche', LINK: 'Chainlink', DOT: 'Polkadot', POL: 'Polygon', LTC: 'Litecoin', BCH: 'Bitcoin Cash', ATOM: 'Cosmos', UNI: 'Uniswap', NEAR: 'NEAR', APT: 'Aptos', ARB: 'Arbitrum', OP: 'Optimism', SUI: 'Sui', ETC: 'Ethereum Classic', XLM: 'Stellar', FIL: 'Filecoin', AAVE: 'Aave', INJ: 'Injective', PEPE: 'Pepe', SHIB: 'Shiba Inu', WLD: 'Worldcoin' };
+const TOP = { BTC: 'Bitcoin', ETH: 'Ethereum', BNB: 'BNB', SOL: 'Solana', XRP: 'XRP', DOGE: 'Dogecoin', TON: 'Toncoin', TRX: 'Tron', ADA: 'Cardano', AVAX: 'Avalanche', LINK: 'Chainlink', DOT: 'Polkadot', POL: 'Polygon', LTC: 'Litecoin', BCH: 'Bitcoin Cash', ATOM: 'Cosmos', UNI: 'Uniswap', NEAR: 'NEAR', APT: 'Aptos', ARB: 'Arbitrum', OP: 'Optimism', SUI: 'Sui', ETC: 'Ethereum Classic', XLM: 'Stellar', FIL: 'Filecoin', AAVE: 'Aave', INJ: 'Injective', PEPE: 'Pepe', SHIB: 'Shiba Inu', WLD: 'Worldcoin', HBAR: 'Hedera', ICP: 'Internet Computer', VET: 'VeChain', ALGO: 'Algorand', RENDER: 'Render', TAO: 'Bittensor', ONDO: 'Ondo', SEI: 'Sei', TIA: 'Celestia', MKR: 'Maker', CRV: 'Curve', LDO: 'Lido DAO', SAND: 'The Sandbox', MANA: 'Decentraland', AXS: 'Axie Infinity', GRT: 'The Graph', FET: 'Fetch.ai', STX: 'Stacks', IMX: 'Immutable', GALA: 'Gala', FLOW: 'Flow', EGLD: 'MultiversX', XTZ: 'Tezos', EOS: 'EOS', THETA: 'Theta', RUNE: 'THORChain', SNX: 'Synthetix', COMP: 'Compound', ENS: 'ENS', CHZ: 'Chiliz', APE: 'ApeCoin', BONK: 'Bonk', FLOKI: 'Floki', JUP: 'Jupiter', PYTH: 'Pyth', ENA: 'Ethena', TRUMP: 'Official Trump', PENDLE: 'Pendle', WIF: 'dogwifhat', ARKM: 'Arkham', JTO: 'Jito', STRK: 'Starknet', MINA: 'Mina', KAS: 'Kaspa', NEO: 'Neo', ZEC: 'Zcash', DASH: 'Dash', XMR: 'Monero', BAT: 'Basic Attention', ZRX: '0x', YFI: 'yearn.finance', SUSHI: 'SushiSwap', CAKE: 'PancakeSwap', DYDX: 'dYdX', GMX: 'GMX', LRC: 'Loopring', ANKR: 'Ankr', QNT: 'Quant', ROSE: 'Oasis', ZIL: 'Zilliqa', IOTA: 'IOTA', KSM: 'Kusama', WOO: 'WOO', AR: 'Arweave', BLUR: 'Blur' };
 export async function getMarket(fiat = 'usd') {
   const key = `m:${fiat}`;
   const fx = await fiatRate(fiat);
   try {
-    const q = encodeURIComponent(JSON.stringify(Object.keys(TOP).map((s) => `${s}USDT`)));
-    const rows = await getJson(`${BN}/ticker/24hr?symbols=${q}`);
+    let rows;
+    try { rows = await getJson(`${BN}/ticker/24hr?symbols=${encodeURIComponent(JSON.stringify(Object.keys(TOP).map((s) => `${s}USDT`)))}`); }
+    catch { // один из тикеров может быть недоступен на Binance: берём весь список и отбираем сами
+      rows = (await getJson(`${BN}/ticker/24hr`)).filter((r) => r.symbol.endsWith('USDT') && TOP[r.symbol.slice(0, -4)]);
+    }
     const out = rows.map((r) => { const s = r.symbol.replace(/USDT$/, ''); return { name: TOP[s], symbol: s, current_price: Number(r.lastPrice) * fx, price_change_percentage_24h: Number(r.priceChangePercent), vol: Number(r.quoteVolume) }; });
     out.sort((a, b) => b.vol - a.vol);
     return out;
@@ -210,4 +213,19 @@ export async function lidoApr() {
     const d = await r.json();
     return Number(d.data.smaApr);
   } catch { return null; }
+}
+
+// Логотипы монет: CoinGecko отдаёт картинки для топ-250 по капитализации. Карта «тикер → URL» кэшируется на сутки.
+const IKEY = 'noir.icons.v1';
+export async function getIconMap() {
+  try { const c = JSON.parse(localStorage.getItem(IKEY)); if (c && Date.now() - c.t < 86400e3 && Object.keys(c.m).length > 50) return c.m; } catch {}
+  const m = {};
+  try {
+    for (const page of [1, 2]) {
+      const rows = await getJson(`${CG}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=${page}&sparkline=false`);
+      for (const r of rows) { const k = String(r.symbol).toUpperCase(); if (!m[k] && /^https:\/\//.test(r.image || '')) m[k] = r.image; }
+    }
+    localStorage.setItem(IKEY, JSON.stringify({ t: Date.now(), m }));
+  } catch { /* лимит или офлайн: останутся запасные источники */ }
+  return m;
 }
