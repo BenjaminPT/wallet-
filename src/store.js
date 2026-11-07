@@ -188,14 +188,17 @@ export async function currentKeys() {
 export async function refresh() {
   if (S.s.mode === 'demo') { S.balances = { ...DEMO_BAL }; S.prices = DEMO_PRICES; S.txs = DEMO_TXS; emit(); return; }
   if (!S.addrs) return;
+  const addrs = S.addrs, stale = () => S.addrs !== addrs; // аккаунт мог смениться или заблокироваться, пока шли запросы
   S.loading = true; emit();
   const list = assets();
   const cgs = list.map((a) => a.cg);
-  try { S.prices = await getPrices(cgs, S.s.fiat); S.offline = false; } catch { S.offline = true; }
+  try { const pr = await getPrices(cgs, S.s.fiat); if (stale()) return; S.prices = pr; S.offline = false; } catch { S.offline = true; }
   await Promise.all(list.map(async (a) => {
-    try { S.balances[assetId(a)] = await getBalance(a, S.addrs); emit(); } catch { /* оставить предыдущее */ }
+    try { const b = await getBalance(a, addrs); if (!stale()) { S.balances[assetId(a)] = b; emit(); } } catch { /* оставить предыдущее */ }
   }));
-  const hist = await Promise.all([...['btc', 'sol', 'ton', 'tron'].map((n) => getHistory(n, S.addrs)), getEvmHistory(S.addrs.evm)]);
+  if (stale()) return;
+  const hist = await Promise.all([...['btc', 'sol', 'ton', 'tron'].map((n) => getHistory(n, addrs)), getEvmHistory(addrs.evm)]);
+  if (stale()) return;
   S.txs = hist.flat().sort((a, b) => b.ts - a.ts).slice(0, 40);
   S.pending = await refreshPending();
   S.loading = false; emit();
