@@ -18,11 +18,25 @@ export function evmProvider(netId) {
   if (!providers[netId]) providers[netId] = new JsonRpcProvider(n.rpc, n.chainId, { staticNetwork: true, batchMaxCount: 10 });
   return providers[netId];
 }
-const j = async (url, init) => {
+// toncenter и trongrid без ключа пускают ~1 запрос/с с одного IP: выстраиваем запросы в очередь и повторяем после 429
+const GAP = { 'toncenter.com': 1100, 'api.trongrid.io': 1100 };
+const gates = {};
+const rawJ = async (url, init, retry = 1) => {
   const r = await fetch(url, init);
+  if (r.status === 429 && retry > 0) { await new Promise((x) => setTimeout(x, 1500)); return rawJ(url, init, retry - 1); }
   if (!r.ok) throw new Error(`HTTP ${r.status} ${url.split('?')[0]}`);
   return r.json();
 };
+const j = async (url, init) => {
+  const host = new URL(url).host, gap = GAP[host];
+  if (!gap) return rawJ(url, init);
+  const prev = gates[host] || Promise.resolve();
+  let release; gates[host] = new Promise((x) => { release = x; });
+  await prev;
+  try { return await rawJ(url, init); } finally { setTimeout(release, gap); }
+};
+const memo = new Map();
+const once = (key, ttl, fn) => { const h = memo.get(key); if (h && Date.now() - h.t < ttl) return h.p; const p = fn(); memo.set(key, { t: Date.now(), p }); p.catch(() => memo.delete(key)); return p; };
 const num = (raw, dec) => Number(formatUnits(raw, dec));
 
 // ---------- БАЛАНСЫ ----------
@@ -57,7 +71,7 @@ export async function getBalance(asset, addrs) {
       return Number(fromNano(d.result));
     }
     case 'tron': {
-      const d = await j(`${n.api}/v1/accounts/${addrs.tron}`);
+      const d = await once(`tron:${addrs.tron}`, 10000, () => j(`${n.api}/v1/accounts/${addrs.tron}`));
       const acc = d.data?.[0];
       if (!acc) return 0;
       if (asset.native) return (acc.balance || 0) / 1e6;
