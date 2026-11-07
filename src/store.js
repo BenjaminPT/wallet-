@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'preact/hooks';
-import { hasVault, saveVault, unlockVault, wipeVault } from './core/vault.js';
+import { listAccounts, hasAccounts, activeId, setActive, addAccount, unlockAccount, removeAccount, migrateLegacy } from './core/accounts.js';
 import { deriveAll, getKeys } from './core/derive.js';
 import { assetList, assetId, netOf } from './core/assets.js';
 import { getBalance, getHistory, getEvmHistory, loadPending, refreshPending, bumpPending } from './core/chains.js';
 import { getPrices } from './core/market.js';
 import { DEMO_ADDRS, DEMO_BAL, DEMO_PRICES, DEMO_TXS } from './core/demo.js';
 import { setLang, detectLang } from './i18n.js';
-import { bioUnlock, bioDisable } from './core/bio.js';
+import { bioUnlock, bioDisable, bioMigrate } from './core/bio.js';
 
 const SKEY = 'noir.settings.v1';
 const defaults = { lang: detectLang(), fiat: 'usd', mode: 'demo', testnets: false, autolock: 5, onboarded: false, coached: false, book: [], custom: [], alchemy: '' };
@@ -15,6 +15,8 @@ const load = () => { try { return { ...defaults, ...JSON.parse(localStorage.getI
 const S = {
   s: load(),
   locked: true,
+  account: null,
+  accounts: [],
   mnemonic: null,
   addrs: null,
   balances: {},
@@ -56,6 +58,11 @@ export const isDemo = () => S.s.mode === 'demo' || !S.addrs;
 export const assets = () => assetList(S.s.testnets, S.s.custom);
 
 // ---------- жизненный цикл ----------
+// Разблокированные в этой сессии аккаунты: id -> seed (только в памяти). Переключение между ними мгновенное.
+const sessions = {};
+const syncAccounts = () => { S.accounts = listAccounts(); };
+export const isUnlocked = (id) => !!sessions[id];
+
 let lockTimer;
 function armLock() {
   clearTimeout(lockTimer);
@@ -65,8 +72,10 @@ function armLock() {
 document.addEventListener?.('visibilitychange', () => { if (document.hidden && S.s.mode === 'real' && S.s.autolock === 0) lock(); });
 
 export function init() {
-  if (S.s.mode === 'real' && hasVault()) { S.locked = true; resetTo('unlock'); }
-  else if (S.s.mode === 'real' && !hasVault()) { S.s.mode = 'demo'; enterDemo(); }
+  const mid = migrateLegacy(); if (mid) bioMigrate(mid);
+  syncAccounts();
+  if (S.s.mode === 'real' && hasAccounts()) { S.account = activeId(); S.locked = true; resetTo('unlock'); }
+  else if (S.s.mode === 'real') { S.s.mode = 'demo'; enterDemo(); }
   else if (!S.s.onboarded) resetTo('onboarding');
   else enterDemo();
 }
@@ -79,22 +88,38 @@ export function enterDemo() {
   resetTo('home');
 }
 
-export async function createVault(mnemonic, password) {
-  await saveVault(password, { mnemonic });
+// Открыть (сделать активным) уже разблокированный аккаунт
+async function activate(id) {
+  const mnemonic = sessions[id];
+  S.account = id; setActive(id);
+  S.mnemonic = mnemonic;
+  S.addrs = await deriveAll(mnemonic, { testnet: false });
   S.s = { ...S.s, mode: 'real', onboarded: true };
-  localStorage.setItem(SKEY, JSON.stringify(S.s));
-  await openSession(mnemonic);
+  try { localStorage.setItem(SKEY, JSON.stringify(S.s)); } catch {}
+  S.locked = false;
+  S.balances = {}; S.txs = [];
+  syncAccounts();
+  resetTo('home');
+  armLock();
+  refresh();
+}
+
+// Создать/импортировать аккаунт (может быть уже не первым)
+export async function createVault(mnemonic, password, name) {
+  const id = await addAccount({ name, password, mnemonic });
+  sessions[id] = mnemonic;
+  await activate(id);
 }
 
 // Задержка после неудачных попыток ввода пароля (защита интерфейса; офлайн-перебор останавливает только стойкость PBKDF2)
 const FKEY = 'noir.fails.v1';
 const fails = () => { try { return JSON.parse(localStorage.getItem(FKEY)) || { n: 0, until: 0 }; } catch { return { n: 0, until: 0 }; } };
 export const lockoutLeft = () => Math.max(0, Math.ceil((fails().until - Date.now()) / 1000));
-export async function unlock(password) {
+export async function unlock(password, id = S.account || activeId()) {
   const left = lockoutLeft();
   if (left) throw new Error(`locked_out:${left}`);
   let mnemonic;
-  try { ({ mnemonic } = await unlockVault(password)); }
+  try { mnemonic = await unlockAccount(id, password); }
   catch (e) {
     const f = fails(); f.n++;
     if (f.n >= 5) f.until = Date.now() + Math.min(3600, 30 * 2 ** (f.n - 5)) * 1000;
@@ -102,39 +127,57 @@ export async function unlock(password) {
     throw e;
   }
   try { localStorage.removeItem(FKEY); } catch {}
-  S.s = { ...S.s, mode: 'real' };
-  await openSession(mnemonic);
+  sessions[id] = mnemonic;
+  await activate(id);
 }
 
-async function openSession(mnemonic) {
-  S.mnemonic = mnemonic;
-  S.addrs = await deriveAll(mnemonic, { testnet: false });
-  S.locked = false;
-  S.balances = {}; S.txs = [];
-  resetTo('home');
-  armLock();
-  refresh();
+export async function unlockBiometric(id = S.account || activeId()) {
+  sessions[id] = await bioUnlock(id);
+  await activate(id);
 }
 
-export function lock() {
-  if (S.s.mode !== 'real') return;
-  S.mnemonic = null; S.addrs = null; S.locked = true; S.balances = {};
+// Переключиться на аккаунт: если он уже разблокирован — сразу, иначе спросить пароль/биометрию
+export async function switchAccount(id) {
+  S.account = id; setActive(id);
+  if (sessions[id]) return activate(id);
+  S.mnemonic = null; S.addrs = null; S.locked = true;
   resetTo('unlock');
 }
 
-export async function unlockBiometric() {
-  const mnemonic = await bioUnlock();
-  S.s = { ...S.s, mode: 'real' };
-  await openSession(mnemonic);
+// Заблокировать всё: забыть все seed в памяти
+export function lock() {
+  if (S.s.mode !== 'real') return;
+  for (const k of Object.keys(sessions)) delete sessions[k];
+  S.mnemonic = null; S.addrs = null; S.locked = true; S.balances = {};
+  syncAccounts(); S.account = activeId();
+  resetTo(hasAccounts() ? 'unlock' : 'onboarding');
 }
 
-export function resetWallet() {
-  wipeVault(); bioDisable();
-  S.mnemonic = null; S.addrs = null;
-  S.s = { ...S.s, mode: 'demo' };
-  localStorage.setItem(SKEY, JSON.stringify(S.s));
-  enterDemo();
+// Выйти из текущего аккаунта (остальные разблокированные остаются)
+export async function logout(id = S.account) {
+  delete sessions[id];
+  const other = Object.keys(sessions)[0];
+  if (other) return activate(other);
+  lock();
 }
+
+// Удалить аккаунт с устройства (seed без резервной копии будет потерян)
+export async function deleteAccount(id = S.account) {
+  removeAccount(id); bioDisable(id); delete sessions[id];
+  syncAccounts();
+  if (S.account === id) {
+    S.account = activeId();
+    const other = Object.keys(sessions)[0];
+    if (other) return activate(other);
+    S.mnemonic = null; S.addrs = null;
+    if (hasAccounts()) { S.locked = true; return resetTo('accounts'); }
+    S.s = { ...S.s, mode: 'demo' }; localStorage.setItem(SKEY, JSON.stringify(S.s));
+    return enterDemo();
+  }
+  emit();
+}
+export const resetWallet = () => deleteAccount(S.account);
+export { hasAccounts };
 
 export async function currentKeys() {
   if (!S.mnemonic) throw new Error('locked');
