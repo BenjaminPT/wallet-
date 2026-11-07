@@ -1,0 +1,36 @@
+{
+  "name": "noir-wallet",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Noir Wallet — non-custodial multi-chain PWA wallet (EVM, Bitcoin, Solana, TON, Tron)",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test test/",
+    "serve": "node server/server.mjs",
+    "shots": "node test/shots.mjs"
+  },
+  "dependencies": {
+    "@noble/curves": "^1.6.0",
+    "@noble/hashes": "^1.5.0",
+    "@scure/base": "^1.1.9",
+    "@scure/bip32": "^1.5.0",
+    "@scure/bip39": "^1.4.0",
+    "@scure/btc-signer": "^1.4.0",
+    "@solana/spl-token": "^0.4.9",
+    "@solana/web3.js": "^1.95.3",
+    "@ton/core": "^0.59.0",
+    "@ton/crypto": "^3.3.0",
+    "@ton/ton": "^15.1.0",
+    "buffer": "^6.0.3",
+    "ethers": "^6.13.4",
+    "htm": "^3.1.1",
+    "jsqr": "^1.4.0",
+    "preact": "^10.24.3",
+    "qrcode-generator": "^1.4.4"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "playwright": "^1.48.0"
+  }
+}
