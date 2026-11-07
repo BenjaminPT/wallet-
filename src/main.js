@@ -24,6 +24,8 @@ function App() {
   const [tab, setTab] = useState('home');
   const top = s.stack[s.stack.length - 1];
   useEffect(() => { document.documentElement.lang = s.s.lang; }, [s.s.lang]);
+  const AUTH = ['onboarding', 'setPass', 'seed', 'verify', 'import', 'unlock'];
+  useEffect(() => { if (top && AUTH.includes(top.name)) setTab('home'); }, [top?.name]);
   if (!top) return null;
   let view;
   if (top.name === 'home') view = tab === 'home' ? html`<${Home}/>` : tab === 'market' ? html`<${MarketTab}/>` : tab === 'nft' ? html`<${NftTab}/>` : html`<${SettingsTab}/>`;
