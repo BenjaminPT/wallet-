@@ -5,7 +5,7 @@ import { assetList, assetId, netOf } from './core/assets.js';
 import { getBalance, getHistory, getEvmHistory, loadPending, refreshPending, bumpPending } from './core/chains.js';
 import { getPrices } from './core/market.js';
 import { setLang, detectLang, t } from './i18n.js';
-import { bioUnlock, bioDisable, bioMigrate } from './core/bio.js';
+import { bioUnlock, bioDisable, bioMigrate, bioAvailable, bioEnabled } from './core/bio.js';
 
 const SKEY = 'noir.settings.v1';
 const defaults = { lang: detectLang(), fiat: 'usd', mode: 'real', icon: 'dark', testnets: false, autolock: 5, onboarded: false, coached: false, book: [], custom: [], alchemy: '' };
@@ -106,7 +106,9 @@ export async function createVault(mnemonic, password, name) {
   const id = await addAccount({ name: name || (n === 0 ? t('mainAccount') : `${t('accountWord')} ${n + 1}`), password, mnemonic });
   sessions[id] = mnemonic;
   await activate(id);
+  if (!bioEnabled(id) && await bioAvailable()) { S.offerBio = id; emit(); }
 }
+export const dismissBioOffer = () => { S.offerBio = null; emit(); };
 
 // Задержка после неудачных попыток ввода пароля (защита интерфейса; офлайн-перебор останавливает только стойкость PBKDF2)
 const FKEY = 'noir.fails.v1';

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
-import { AccountButton } from './accounts.js';
+import { AccountButton, BioOffer } from './accounts.js';
 import { Mark } from './mark.js';
 import { getAccount } from '../core/accounts.js';
 import { html, Icon, Coin, Screen, Btn, Sheet, Chart, Keypad, QR, Scanner, fmtFiat, fmtNum, short, pct, ago, copyText, haptic } from './common.js';
@@ -31,7 +31,7 @@ export function Home() {
   const delta = first ? ((last - first) / first) * 100 : 0;
   const [whole, frac] = (shown || 0).toFixed(2).split('.');
   const acts = [['send', 'send', () => push('sendPick')], ['receive', 'receive', () => push('receivePick')], ['swap', 'swap', () => push('swap')], ['stake', 'stake', () => push('stake')]];
-  return html`<div class="home">
+  return html`<div class="home">${state.offerBio && html`<${BioOffer}/>`}
     <div class="home-top"><b class="logo"><${Mark} s=${26}/></b><${AccountButton}/><button class="icon-btn" onClick=${refresh} aria-label=${t('refresh')}><${Icon} n="refresh" s=${20}/></button></div>
     <div class="balance coach-1"><div class="dim">${t('total')}</div><div class="big">${fmtFiat(Number(whole)).replace(/\.\d+$/, '')}<small>.${frac}</small></div><div class=${delta >= 0 ? 'up' : 'down'}>${pct(delta)}</div></div>
     <${Chart} data=${data} onCursor=${setCursor}/>

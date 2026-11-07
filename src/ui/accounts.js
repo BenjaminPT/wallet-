@@ -3,7 +3,8 @@
 import { useState } from 'preact/hooks';
 import { html, Icon, Btn, Sheet, haptic } from './common.js';
 import { t } from '../i18n.js';
-import { state, push, switchAccount, isUnlocked } from '../store.js';
+import { state, push, switchAccount, isUnlocked, dismissBioOffer, toast } from '../store.js';
+import { bioEnable } from '../core/bio.js';
 import { listAccounts, renameAccount, setAccountColor, COLORS } from '../core/accounts.js';
 
 const short = (a) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : '');
@@ -50,4 +51,14 @@ export function AccountsSheet({ onClose }) {
     <${Btn} kind="ghost" onClick=${() => { onClose(); push('setPass', { mode: 'create' }); }}>${t('addAccountNew')}<//>
     <button class="link center" onClick=${() => { onClose(); push('import'); }}>${t('signInFull')}</button>
   <//>`;
+}
+
+export function BioOffer() {
+  const [busy, setBusy] = useState(false);
+  const acc = listAccounts().find((a) => a.id === state.offerBio);
+  const on = async () => { setBusy(true); try { await bioEnable(state.offerBio, state.mnemonic, acc?.name); toast(t('bioOnToast')); } catch { toast(t('bioFail')); } dismissBioOffer(); };
+  return html`<${Sheet} title=${t('bio')} onClose=${dismissBioOffer}>
+    <p class="dim">${t('bioOffer')}</p>
+    <${Btn} busy=${busy} onClick=${on}>${t('bioEnableBtn')}<//>
+    <${Btn} kind="ghost" onClick=${dismissBioOffer}>${t('notNow')}<//><//>`;
 }

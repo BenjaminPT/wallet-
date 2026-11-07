@@ -113,7 +113,7 @@ export function Accounts() {
 export function Unlock() {
   const id = state.account, acc = getAccount(id);
   const [p, setP] = useState(''), [err, setErr] = useState(''), [busy, setBusy] = useState(false), [bio, setBio] = useState(false);
-  useEffect(() => { if (bioEnabled(id)) bioAvailable().then(setBio); }, [id]);
+  useEffect(() => { if (bioEnabled(id)) bioAvailable().then((ok) => { setBio(ok); if (ok) unlockBiometric(id).catch(() => {}); }); }, [id]);
   const goBio = async () => { setErr(''); try { await unlockBiometric(id); } catch { setErr(t('bioFail')); } };
   const go = async () => {
     setBusy(true); setErr('');
