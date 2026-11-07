@@ -19,7 +19,7 @@
     "@scure/btc-signer": "^1.4.0",
     "@solana/spl-token": "^0.4.9",
     "@solana/web3.js": "^1.95.3",
-    "@ton/core": "^0.59.0",
+    "@ton/core": "^0.62.0",
     "@ton/crypto": "^3.3.0",
     "@ton/ton": "^15.1.0",
     "buffer": "^6.0.3",
