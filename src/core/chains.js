@@ -5,7 +5,7 @@ import { secp256k1 } from '@noble/curves/secp256k1';
 import { base58check } from '@scure/base';
 import { sha256 } from '@noble/hashes/sha256';
 import { Connection, PublicKey, SystemProgram, Transaction, Keypair, LAMPORTS_PER_SOL } from '@solana/web3.js';
-import { getAssociatedTokenAddressSync, createTransferCheckedInstruction, createAssociatedTokenAccountIdempotentInstruction } from '@solana/spl-token';
+import { ataOf, createAtaIdempotentIx, transferCheckedIx, tokenAmount } from './spl.js';
 import { TonClient, WalletContractV4, internal, toNano, fromNano, beginCell, Address } from '@ton/ton';
 import { netOf } from './assets.js';
 import { toHex, fromHex } from './derive.js';
@@ -44,9 +44,8 @@ export async function getBalance(asset, addrs) {
       const owner = new PublicKey(addrs.sol);
       if (asset.native) return (await c.getBalance(owner)) / LAMPORTS_PER_SOL;
       // публичные RPC запрещают «индексные» методы (getTokenAccountsByOwner), поэтому читаем стандартный ATA-аккаунт напрямую
-      const ata = getAssociatedTokenAddressSync(new PublicKey(asset.contract), owner, true);
-      try { return (await c.getTokenAccountBalance(ata)).value.uiAmount || 0; }
-      catch (e) { if (/could not find account|Invalid param/i.test(String(e.message))) return 0; throw e; }
+      const info = await c.getAccountInfo(ataOf(new PublicKey(asset.contract), owner));
+      return info ? Number(tokenAmount(info.data)) / 10 ** asset.decimals : 0;
     }
     case 'ton': {
       if (!asset.native) {
@@ -169,10 +168,10 @@ async function sendSol(n, asset, secret32, from, to, amount) {
     tx.add(SystemProgram.transfer({ fromPubkey: kp.publicKey, toPubkey: toPk, lamports: Math.round(amount * LAMPORTS_PER_SOL) }));
   } else {
     const mint = new PublicKey(asset.contract);
-    const src = getAssociatedTokenAddressSync(mint, kp.publicKey);
-    const dst = getAssociatedTokenAddressSync(mint, toPk, true);
-    tx.add(createAssociatedTokenAccountIdempotentInstruction(kp.publicKey, dst, toPk, mint));
-    tx.add(createTransferCheckedInstruction(src, mint, dst, kp.publicKey, units(amount, asset.decimals), asset.decimals));
+    const src = ataOf(mint, kp.publicKey);
+    const dst = ataOf(mint, toPk);
+    tx.add(createAtaIdempotentIx(kp.publicKey, dst, toPk, mint));
+    tx.add(transferCheckedIx(src, mint, dst, kp.publicKey, units(amount, asset.decimals), asset.decimals));
   }
   const { blockhash, lastValidBlockHeight } = await c.getLatestBlockhash();
   tx.recentBlockhash = blockhash;
