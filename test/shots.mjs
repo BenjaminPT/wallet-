@@ -44,7 +44,7 @@ await step('create', async () => {
   await p.locator('.set-tab > .seg2 button').nth(1).click();
   await p.waitForSelector('.field');
   const pw = p.locator('input[type=password]'); await pw.nth(0).fill('testpass123'); await pw.nth(1).fill('testpass123');
-  await p.click('.chk >> nth=0'); await p.click('.chk >> nth=1');
+  await p.click('.chk i >> nth=0'); await p.click('.chk i >> nth=1');
   await p.click('.btn.primary'); await p.waitForSelector('.seed'); await p.click('.seed');
   const words = await p.$$eval('.w', (els) => els.map((e) => e.textContent.replace(/^\d+/, '')));
   await shot('13-seed'); await p.click('.btn.primary'); await p.waitForSelector('.field');

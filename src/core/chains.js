@@ -43,8 +43,10 @@ export async function getBalance(asset, addrs) {
       const c = new Connection(n.rpc, 'confirmed');
       const owner = new PublicKey(addrs.sol);
       if (asset.native) return (await c.getBalance(owner)) / LAMPORTS_PER_SOL;
-      const r = await c.getParsedTokenAccountsByOwner(owner, { mint: new PublicKey(asset.contract) });
-      return r.value.reduce((s, a) => s + (a.account.data.parsed.info.tokenAmount.uiAmount || 0), 0);
+      // публичные RPC запрещают «индексные» методы (getTokenAccountsByOwner), поэтому читаем стандартный ATA-аккаунт напрямую
+      const ata = getAssociatedTokenAddressSync(new PublicKey(asset.contract), owner, true);
+      try { return (await c.getTokenAccountBalance(ata)).value.uiAmount || 0; }
+      catch (e) { if (/could not find account|Invalid param/i.test(String(e.message))) return 0; throw e; }
     }
     case 'ton': {
       if (!asset.native) {

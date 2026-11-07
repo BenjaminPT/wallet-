@@ -54,6 +54,9 @@ test('балансы известных кошельков во всех сет�
 test('история и комиссии', T, async () => {
   assert.ok((await getEvmHistory(VITALIK)).length > 0, 'EVM history (Blockscout)');
   assert.ok((await getHistory('btc', addrs)).length > 0, 'BTC history');
+  assert.ok((await getHistory('sol', addrs)).length > 0, 'SOL history');
+  assert.ok((await getHistory('ton', addrs)).length > 0, 'TON history');
+  assert.ok((await getHistory('tron', addrs)).length > 0, 'TRON history');
   for (const [net, sym] of [['eth', 'ETH'], ['btc', 'BTC'], ['sol', 'SOL'], ['tron', 'USDT'], ['ton', 'USDT']]) {
     const f = await estimateFee(asset(net, sym), addrs, VITALIK, 1);
     assert.ok(f.fee > 0, `fee ${net}`); console.log('fee', net, sym, f.fee, f.unit);
