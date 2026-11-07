@@ -13,7 +13,7 @@ const p = await ctx.newPage();
 p.on('pageerror', (e) => errors.push(String(e)));
 p.on('console', (m) => m.type() === 'error' && !/Failed to load resource|net::ERR|telegram/i.test(m.text()) && errors.push(m.text()));
 const shot = (n) => p.screenshot({ path: `shots/${n}.png` });
-const step = async (name, fn) => { try { await fn(); } catch (e) { errors.push(`${name}: ${e.message.split('\n').slice(0, 4).join(' / ')}`); await shot('fail-' + name).catch(() => {}); } };
+const step = async (name, fn) => { try { await fn(); } catch (e) { errors.push(`${name}: ${e.message.split('\n').slice(0, 4).join(' / ')}`); await shot('fail-' + name).catch(() => {}); errors.push('  body: ' + (await p.textContent('body').catch(() => '')).slice(0, 300)); } };
 
 await p.goto('http://localhost:8099/');
 await p.waitForSelector('.onb h1');
@@ -51,6 +51,8 @@ await step('create', async () => {
   const inputs = p.locator('input.field');
   for (let i = 0; i < 3; i++) await inputs.nth(i).fill(words[nums[i] - 1]);
   await p.click('.btn.primary'); await p.waitForSelector('.home .big', { timeout: 15000 }); await shot('14-real-home');
+});
+await step('unlock', async () => {
   await p.reload(); await p.waitForSelector('input[type=password]'); await shot('15-unlock');
   await p.fill('input[type=password]', 'testpass123'); await p.click('.btn.primary'); await p.waitForSelector('.home .big', { timeout: 15000 });
 });
