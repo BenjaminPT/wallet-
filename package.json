@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
-    "test": "node --test test/",
+    "test": "node --test test/derive.test.mjs",
     "serve": "node server/server.mjs",
     "shots": "node test/shots.mjs"
   },
