@@ -37,8 +37,10 @@ jobs:
         run: |
           mkdir -p pkg/noir-wallet
           cp -r dist pkg/noir-wallet/app
-          cp server/server.mjs launch/* Dockerfile pkg/noir-wallet/
-          cp README.md pkg/noir-wallet/ || true
+          cp server/server.mjs Dockerfile pkg/noir-wallet/
+          cp launch/* pkg/noir-wallet/
+          cp README.md TELEGRAM.md pkg/noir-wallet/ || true
+          mkdir -p pkg/noir-wallet/telegram && cp telegram/setup-bot.mjs pkg/noir-wallet/telegram/
           chmod +x pkg/noir-wallet/*.sh pkg/noir-wallet/*.command
           (cd pkg && zip -qr ../noir-wallet.zip noir-wallet)
           cp dist/single.html noir-wallet-single.html

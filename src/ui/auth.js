@@ -15,7 +15,7 @@ export function Onboarding() {
     <div class="onb-bot">
       <div class="bars">${slides.map((s, k) => html`<i class=${k <= i ? 'on' : ''}/>`)}</div>
       ${last
-        ? html`<${Btn} onClick=${enterDemo}>${t('tryDemo')}<//><${Btn} kind="ghost" onClick=${() => push('setPass', { mode: 'create' })}>${t('createWallet')}<//><button class="link center" onClick=${() => push('import')}>${t('importWallet')}</button>`
+        ? html`<${Btn} onClick=${() => push('setPass', { mode: 'create' })}>${t('createWallet')}<//><${Btn} kind="ghost" onClick=${() => push('import')}>${t('importWallet')}<//><button class="link center" onClick=${enterDemo}>${t('tryDemo')}</button>`
         : html`<${Btn} onClick=${() => { haptic(); setI(i + 1); }}>${t('next')}<//>`}
     </div>
   </div>`;

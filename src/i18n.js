@@ -22,6 +22,7 @@ const D = {
     language: 'Язык', currency: 'Валюта', mode: 'Режим', modeDemo: 'Демо', modeReal: 'Реальный', testnets: 'Тестовые сети', autolock: 'Автоблокировка', min: 'мин', showSeed: 'Показать seed-фразу', changePass: 'Сменить пароль', addrBook: 'Адресная книга', customTokens: 'Свои токены', alchemyKey: 'Ключ Alchemy (NFT)', resetWallet: 'Удалить кошелёк с устройства', resetWarn: 'Без seed-фразы доступ будет потерян. Продолжить?', lock: 'Заблокировать', about: 'О кошельке', aboutText: 'Некастодиальный кошелёк с открытым кодом. Не проходил независимый аудит: начните с малых сумм.',
     needRealWallet: 'Чтобы работать с реальными средствами, создайте или импортируйте кошелёк', label: 'Название', noContacts: 'Контактов нет',
     coach1: 'Это ваш баланс. Тап по активу откроет детали и график.', coach2: 'Быстрые действия: отправить, получить, обменять, застейкать.', coach3: 'Вкладки внизу: рынок, NFT и настройки. Режим демо/реальный переключается в настройках.', gotIt: 'Понятно',
+    slippage: 'Проскальзывание', feeEst: 'Комиссии ≈', time: 'Время', priceImpact: 'Курс хуже рыночного на {v}%. Проверьте сумму и пару.', swapNoRoute: 'Для этой пары обмен недоступен. Работает: EVM↔EVM, EVM↔Tron, Solana↔Solana.', needGas: 'Нужен {sym} на балансе для комиссии сети', poolTip: '', search2: 'Поиск актива',
     offline: 'Нет сети — показаны последние данные', refresh: 'Обновить', contractAddr: 'Адрес контракта', symbol: 'Символ', decimals: 'Знаков', addToken: 'Добавить токен',
   },
   en: {
@@ -47,6 +48,7 @@ const D = {
     language: 'Language', currency: 'Currency', mode: 'Mode', modeDemo: 'Demo', modeReal: 'Real', testnets: 'Testnets', autolock: 'Auto-lock', min: 'min', showSeed: 'Show seed phrase', changePass: 'Change password', addrBook: 'Address book', customTokens: 'Custom tokens', alchemyKey: 'Alchemy key (NFT)', resetWallet: 'Remove wallet from device', resetWarn: 'Without the seed phrase access is lost. Continue?', lock: 'Lock', about: 'About', aboutText: 'Open-source non-custodial wallet. Not independently audited: start with small amounts.',
     needRealWallet: 'Create or import a wallet to use real funds', label: 'Label', noContacts: 'No contacts',
     coach1: 'This is your balance. Tap an asset for details and a chart.', coach2: 'Quick actions: send, receive, swap, stake.', coach3: 'Tabs below: market, NFT and settings. Switch demo/real mode in settings.', gotIt: 'Got it',
+    slippage: 'Slippage', feeEst: 'Fees ≈', time: 'Time', priceImpact: 'Rate is {v}% worse than market. Check amount and pair.', swapNoRoute: 'Swap unavailable for this pair. Supported: EVM↔EVM, EVM↔Tron, Solana↔Solana.', needGas: 'You need {sym} for network fees', poolTip: '', search2: 'Search asset',
     offline: 'Offline — showing last data', refresh: 'Refresh', contractAddr: 'Contract address', symbol: 'Symbol', decimals: 'Decimals', addToken: 'Add token',
   },
 };

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'preact/hooks';
 import { html, Icon, Coin, Screen, Btn, Sheet, Chart, Keypad, QR, Scanner, fmtFiat, fmtNum, short, pct, ago, copyText, haptic } from './common.js';
 import { t } from '../i18n.js';
 import { state, push, pop, assets, balanceOf, priceOf, changeOf, valueOf, total, addrFor, refresh, isDemo, currentKeys, toast, setSettings } from '../store.js';
-import { netOf, assetId } from '../core/assets.js';
+import { netOf, assetId, tag, label } from '../core/assets.js';
 import { getChart } from '../core/market.js';
 import { demoChart } from '../core/demo.js';
 import { validateAddress, estimateFee, send as sendTx, explorerTx } from '../core/chains.js';
@@ -13,7 +13,7 @@ export function Home() {
   const [days, setDays] = useState(7);
   const [data, setData] = useState(null);
   const [cursor, setCursor] = useState(null);
-  const list = assets().filter((a) => balanceOf(a) > 0 || a.native).sort((a, b) => valueOf(b) - valueOf(a));
+  const list = assets().filter((a) => balanceOf(a) > 0 || a.native || a.pin).sort((a, b) => valueOf(b) - valueOf(a));
   const tot = total();
   // график портфеля: показываем динамику самого крупного актива как ориентир
   const lead = list[0];
@@ -38,7 +38,7 @@ export function Home() {
     <div class="actions coach-2">${acts.map(([ic, k, fn]) => html`<button class="act glass" onClick=${fn}><${Icon} n=${ic} s=${22}/><span>${t(k)}</span></button>`)}</div>
     <h3>${t('assets')}</h3>
     <div class="list">${list.map((a) => html`<button class="row glass" key=${assetId(a)} onClick=${() => push('asset', { id: assetId(a) })}>
-      <${Coin} a=${a}/><div class="grow-l"><b>${a.sym}</b><span class="dim">${netOf(a.net).name}</span></div>
+      <${Coin} a=${a}/><div class="grow-l"><b>${a.sym}</b><span class="dim">${tag(a)}</span></div>
       <div class="right"><b>${fmtFiat(valueOf(a))}</b><span class=${changeOf(a) >= 0 ? 'up' : 'down'}>${fmtNum(balanceOf(a))} · ${pct(changeOf(a))}</span></div></button>`)}</div>
     <h3>${t('activity')}</h3>
     <div class="list">${state.txs.length ? state.txs.slice(0, 8).map((x) => html`<a class="row glass" key=${x.id} href=${isDemo() ? null : explorerTx(x.net, x.id)} target="_blank" rel="noopener">
@@ -61,8 +61,11 @@ export function AssetPage({ id }) {
 }
 
 function AssetPicker({ onPick, onClose, only }) {
-  const list = assets().filter((a) => (only ? only(a) : true)).sort((a, b) => valueOf(b) - valueOf(a));
-  return html`<${Sheet} title=${t('chooseAsset')} onClose=${onClose}><div class="list">${list.map((a) => html`<button class="row" key=${assetId(a)} onClick=${() => onPick(a)}><${Coin} a=${a} s=${36}/><div class="grow-l"><b>${a.sym}</b><span class="dim">${netOf(a.net).name}</span></div><div class="right"><span class="dim">${fmtNum(balanceOf(a))}</span></div></button>`)}</div><//>`;
+  const [q, setQ] = useState('');
+  const list = assets().filter((a) => (only ? only(a) : true)).filter((a) => `${a.sym} ${a.name} ${tag(a)}`.toLowerCase().includes(q.toLowerCase())).sort((a, b) => valueOf(b) - valueOf(a) || (b.pin ? 1 : 0) - (a.pin ? 1 : 0));
+  return html`<${Sheet} title=${t('chooseAsset')} onClose=${onClose}>
+    <input class="field glass" placeholder=${t('search2')} value=${q} onInput=${(e) => setQ(e.target.value)}/>
+    <div class="list">${list.map((a) => html`<button class="row" key=${assetId(a)} onClick=${() => onPick(a)}><${Coin} a=${a} s=${36}/><div class="grow-l"><b>${a.sym}</b><span class="dim">${tag(a)}</span></div><div class="right"><span class="dim">${fmtNum(balanceOf(a))}</span></div></button>`)}</div><//>`;
 }
 
 export const SendPick = () => html`<${AssetPicker} onClose=${pop} onPick=${(a) => { pop(); push('send', { id: assetId(a) }); }}/>`;
@@ -90,6 +93,8 @@ export function Send({ id }) {
   const okAddr = to && validateAddress(a.net, to);
   const amount = Number(amt || 0);
   const nativeFee = a.native ? (fee?.fee || 0) : 0;
+  const nat = assets().find((x) => x.net === a.net && x.native);
+  const gasOk = isDemo() || a.native || !fee || balanceOf(nat) >= fee.fee;
   const enough = amount > 0 && amount + nativeFee <= bal + 1e-12;
   useEffect(() => { if (okAddr && amount > 0) estimateFee(a, state.addrs, to, amount).then(setFee); }, [okAddr, amt]);
   const fill = (f) => setAmt(String(Math.max(0, f === 1 ? bal - (a.native ? (fee?.fee || 0) * 1.2 : 0) : bal * f)).slice(0, 12));
@@ -108,7 +113,7 @@ export function Send({ id }) {
     <p class="dim">${st === 'ok' ? (isDemo() ? t('demoSent') : `${fmtNum(amount)} ${a.sym} → ${short(to)}`) : st.startsWith('err') ? st.slice(4, 140) : ''}</p>
     ${st === 'ok' && !isDemo() && html`<a class="link" href=${explorerTx(a.net, tx)} target="_blank" rel="noopener">${t('viewTx')}</a>`}
     ${st !== 'sending' && html`<${Btn} onClick=${() => { pop(); }}>${t('done')}<//>`}</div></div>`;
-  return html`<${Screen} title=${`${t('send')} ${a.sym}`} onBack=${step ? () => setStep(0) : pop}>
+  return html`<${Screen} title=${`${t('send')} ${label(a)}`} onBack=${step ? () => setStep(0) : pop}>
     ${step === 0 ? html`
       <div class="glass card"><div class="dim small">${t('network')}</div><div class="rowi"><${Coin} a=${n} s=${28}/><b>${n.name}</b></div></div>
       <div class="glass card"><div class="dim small">${t('to')}</div>
@@ -123,8 +128,9 @@ export function Send({ id }) {
       <div class="center amount"><div class="dim small">${t('youSend')}</div><div class=${`amt ${amount > 0 && !enough ? 'down' : ''}`}>${amt || '0'}</div><div class="dim">${a.sym} · ≈ ${fmtFiat(amount * price)}</div></div>
       <div class="chips"><button class="chip" onClick=${() => fill(0.25)}>25%</button><button class="chip" onClick=${() => fill(0.5)}>50%</button><button class="chip" onClick=${() => fill(1)}>${t('max')}</button></div>
       <div class="dim center small">${t('available')}: ${fmtNum(bal)} ${a.sym}</div>
+      ${!gasOk && html`<div class="err center small">${t('needGas', { sym: nat.sym })}</div>`}
       <${Keypad} value=${amt} onChange=${setAmt}/>
-      <${Btn} disabled=${!okAddr || amount <= 0 || !enough} onClick=${() => setStep(1)}>${amount > 0 && !enough ? t('insufficient') : t('review')}<//>
+      <${Btn} disabled=${!okAddr || amount <= 0 || !enough || !gasOk} onClick=${() => setStep(1)}>${amount > 0 && !enough ? t('insufficient') : t('review')}<//>
     ` : html`
       <div class="glass card">
         <div class="kv"><span class="dim">${t('youSend')}</span><b>${fmtNum(amount)} ${a.sym}</b></div>

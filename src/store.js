@@ -144,3 +144,11 @@ export const addrFor = (netId) => {
   const fam = netOf(netId).fam;
   return S.addrs?.[fam];
 };
+
+// Живые курсы: цены обновляются каждые ~12 с, балансы раз в минуту (пока вкладка открыта)
+export async function refreshPrices() {
+  if (S.s.mode !== 'real' || !S.addrs || document.hidden) return;
+  try { S.prices = await getPrices(assets().map((a) => a.cg), S.s.fiat); S.offline = false; emit(); } catch { S.offline = true; emit(); }
+}
+let tick = 0;
+setInterval(() => { tick++; if (tick % 5 === 0) { if (S.s.mode === 'real' && S.addrs && !document.hidden) refresh(); } else refreshPrices(); }, 12000);

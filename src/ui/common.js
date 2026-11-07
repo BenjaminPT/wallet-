@@ -6,6 +6,7 @@ import jsQR from 'jsqr';
 import { t } from '../i18n.js';
 import { pop, state } from '../store.js';
 import { FIAT } from '../core/market.js';
+import { iconUrls, chainLogo } from '../core/assets.js';
 
 export const html = htm.bind(h);
 
@@ -35,7 +36,19 @@ const P = {
 };
 export const Icon = ({ n, s = 22, w = 1.8 }) => html`<svg viewBox="0 0 24 24" width=${s} height=${s} fill="none" stroke="currentColor" stroke-width=${w} stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d=${P[n] || ''}/></svg>`;
 
-export const Coin = ({ a, s = 40 }) => html`<span class="coin" style=${`width:${s}px;height:${s}px;font-size:${s * 0.38}px;background:${a.color || '#444'}`}>${(a.sym || '?').slice(0, a.sym.length > 3 ? 2 : 3)}</span>`;
+export function Coin({ a, s = 40 }) {
+  const urls = iconUrls(a);
+  const [i, setI] = useState(0);
+  const [bad, setBad] = useState(false);
+  const net = a.net || a.id;
+  const showBadge = a.contract || ['bsc', 'pol', 'arb', 'opt', 'base'].includes(net);
+  return html`<span class="coinw" style=${`width:${s}px;height:${s}px`}>
+    ${i < urls.length
+      ? html`<img class="ci" src=${urls[i]} width=${s} height=${s} alt="" loading="lazy" onError=${() => setI(i + 1)}/>`
+      : html`<span class="coin" style=${`width:${s}px;height:${s}px;font-size:${s * 0.38}px;background:${a.color || '#444'}`}>${(a.sym || '?').slice(0, (a.sym || '').length > 3 ? 2 : 3)}</span>`}
+    ${showBadge && !bad && html`<img class="cbadge" src=${chainLogo(net)} alt="" onError=${() => setBad(true)}/>`}
+  </span>`;
+}
 
 // ---------- каркас экрана ----------
 export const Screen = ({ title, onBack, right, children, noPad }) => html`

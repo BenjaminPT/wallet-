@@ -8,5 +8,4 @@ if ! command -v node >/dev/null 2>&1; then
   read -n 1 -s -r -p "Нажмите любую клавишу"
   exit 0
 fi
-(sleep 1; open "http://localhost:8080") &
-node server.mjs --port 8080
+node server.mjs --port 8080 --open

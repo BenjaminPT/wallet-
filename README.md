@@ -7,7 +7,7 @@
 ## Как запустить
 
 ### Вариант 1. Ссылка на сайт (проще всего)
-Сайт публикуется на GitHub Pages: `https://<ваш-логин>.github.io/noir-wallet/`
+Сайт публикуется на GitHub Pages: `https://<ваш-логин>.github.io/wallet-/`
 - **iPhone:** Safari → «Поделиться» → «На экран Домой».
 - **Android:** Chrome → меню → «Установить приложение».
 - **ПК/Mac:** Chrome/Edge → значок установки в адресной строке.
@@ -23,9 +23,7 @@
 Docker: `docker build -t noir . && docker run -p 8080:8080 noir`
 
 ### Telegram Mini App
-1. Создайте бота у @BotFather (`/newbot`).
-2. `BOT_TOKEN=... node telegram/setup-bot.mjs https://<ваш-логин>.github.io/noir-wallet/`
-3. В боте появится кнопка «Кошелёк».
+Подробный гайд: [TELEGRAM.md](TELEGRAM.md). Подробный запуск на ПК: `ЗАПУСК.txt` в архиве.
 
 ## Безопасность
 - Seed шифруется AES-GCM-256, ключ из пароля через PBKDF2-SHA256 (600 000 итераций), хранится в localStorage. Пароль не восстанавливается.
@@ -36,7 +34,8 @@ Docker: `docker build -t noir . && docker run -p 8080:8080 noir`
 ## Что реализовано и ограничения
 - Создание/импорт seed, проверка записи, пароль, автоблокировка, адресная книга, свои токены.
 - Баланс, график, история (BTC/SOL/TON/TRX; для EVM ссылка на обозреватель), отправка (нативные + USDT/USDC), QR-приём и сканирование.
-- Обмен: EVM-сети и кросс-чейн (LI.FI), Solana (Jupiter). Стейкинг: ETH через Lido. NFT: Ethereum через ключ Alchemy.
+- Обмен: EVM↔EVM и EVM↔Tron (включая USDT TRC20) через LI.FI, Solana через Jupiter; курс обновляется каждые 20 с. Tron→Tron обмен недоступен. Стейкинг: ETH через Lido. NFT: Ethereum через ключ Alchemy.
+- Курсы и графики: Binance (реальное время), запасной CoinGecko.
 - TON: только нативный TON; адрес выводится из BIP39-фразы (SLIP-10), а не из родной 24-словной TON-фразы, поэтому не совпадёт с Tonkeeper.
 - Биометрия не реализована (веб-версия): защита паролем и автоблокировка.
 - Публичные RPC могут ограничивать запросы; при сбоях подставляйте свои RPC в `src/core/assets.js`.

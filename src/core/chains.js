@@ -184,7 +184,7 @@ async function sendTon(n, key, to, amount) {
 }
 
 const b58 = base58check(sha256);
-const tronHex = (addr) => toHex(b58.decode(addr)); // 41 + 20 байт
+export const tronHex = (addr) => toHex(b58.decode(addr)); // 41 + 20 байт
 async function sendTron(n, asset, priv, from, to, amount) {
   const post = (path, body) => j(`${n.api}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   let tx;
@@ -246,3 +246,44 @@ export async function getHistory(netId, addrs) {
 }
 
 export const explorerTx = (netId, id) => (netOf(netId)?.explorer || '') + id;
+
+// ---------- Tron: подпись и широковещание готовой транзакции, approve, allowance ----------
+const tronApi = () => netOf('tron').api;
+const tronPost = (path, body) => j(`${tronApi()}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+const pad32 = (hex) => hex.padStart(64, '0');
+
+export async function tronBroadcast(priv, tx) {
+  const sig = secp256k1.sign(fromHex(tx.txID), priv);
+  const signed = { ...tx, signature: [toHex(sig.toCompactRawBytes()) + sig.recovery.toString(16).padStart(2, '0')] };
+  const res = await tronPost('/wallet/broadcasttransaction', signed);
+  if (!res.result) { let m = res.message || res.code || 'tron_broadcast_failed'; try { m = decodeURIComponent(escape(atob(res.message))); } catch {} throw new Error(m); }
+  return tx.txID;
+}
+
+export async function tronAllowance(owner, token, spender) {
+  const r = await tronPost('/wallet/triggerconstantcontract', {
+    owner_address: owner, contract_address: token, function_selector: 'allowance(address,address)',
+    parameter: pad32(tronHex(owner).slice(2)) + pad32(tronHex(spender).slice(2)), visible: true,
+  });
+  return BigInt('0x' + (r.constant_result?.[0] || '0'));
+}
+
+async function tronWaitConfirmed(txid) {
+  for (let i = 0; i < 30; i++) {
+    await new Promise((r) => setTimeout(r, 2500));
+    const info = await tronPost('/wallet/gettransactioninfobyid', { value: txid }).catch(() => ({}));
+    if (info.blockNumber) { if (info.receipt?.result && info.receipt.result !== 'SUCCESS') throw new Error('approve_failed'); return; }
+  }
+  throw new Error('approve_timeout');
+}
+
+export async function tronApprove(priv, owner, token, spender, amount) {
+  const r = await tronPost('/wallet/triggersmartcontract', {
+    owner_address: owner, contract_address: token, function_selector: 'approve(address,uint256)',
+    parameter: pad32(tronHex(spender).slice(2)) + pad32(amount.toString(16)), fee_limit: 50000000, call_value: 0, visible: true,
+  });
+  if (!r.transaction?.txID) throw new Error('tron_approve_build_failed');
+  const id = await tronBroadcast(priv, r.transaction);
+  await tronWaitConfirmed(id);
+  return id;
+}

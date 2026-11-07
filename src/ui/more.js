@@ -1,51 +1,90 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { html, Icon, Coin, Screen, Btn, Sheet, fmtFiat, fmtNum, short, pct, copyText } from './common.js';
 import { t } from '../i18n.js';
 import { state, push, pop, assets, balanceOf, priceOf, isDemo, currentKeys, toast, setSettings, refresh, lock, resetWallet, resetTo, enterDemo, addrFor } from '../store.js';
-import { netOf, assetId } from '../core/assets.js';
+import { netOf, assetId, tag, label } from '../core/assets.js';
+import { explorerTx } from '../core/chains.js';
 import { lifiQuote, lifiExecute, jupQuote, jupExecute, lidoStake, lidoApr, getMarket } from '../core/market.js';
 import { hasVault, unlockVault } from '../core/vault.js';
 
 // ---------------- ОБМЕН ----------------
+// Маршруты: Solana↔Solana — Jupiter; EVM↔EVM, EVM↔Tron — LI.FI (в Tron из Tron нельзя). Остальное не поддерживается.
+const routeOf = (a, b) => {
+  const f = netOf(a.net).fam, g = netOf(b.net).fam;
+  if (a === b || (a.net === b.net && a.contract === b.contract)) return null;
+  if (f === 'sol' && g === 'sol') return 'jup';
+  if (['evm', 'tron'].includes(f) && ['evm', 'tron'].includes(g) && !(f === 'tron' && g === 'tron')) return 'lifi';
+  return null;
+};
 export function Swap() {
-  const list = assets().filter((a) => ['evm', 'sol'].includes(netOf(a.net).fam));
+  const list = assets().filter((a) => ['evm', 'sol', 'tron'].includes(netOf(a.net).fam));
   const [from, setFrom] = useState(list.find((a) => a.net === 'eth' && a.native) || list[0]);
-  const [to, setTo] = useState(list.find((a) => a.sym === 'USDC' && a.net === 'eth') || list[1]);
-  const [amt, setAmt] = useState('');
+  const [to, setTo] = useState(list.find((a) => a.sym === 'USDT' && a.net === 'tron') || list[1]);
+  const [amt, setAmt] = useState(''), [slip, setSlip] = useState(0.005);
   const [pick, setPick] = useState(null), [q, setQ] = useState(null), [busy, setBusy] = useState(''), [err, setErr] = useState(''), [done, setDone] = useState('');
-  const fam = netOf(from.net).fam;
-  const compatible = netOf(to.net).fam === fam;
+  const route = routeOf(from, to);
   const amount = Number(amt || 0);
-  const quote = async () => {
-    setErr(''); setQ(null); setBusy('q');
+  const bal = balanceOf(from);
+  const nativeOf = (a) => assets().find((x) => x.net === a.net && x.native);
+  const gasBal = balanceOf(nativeOf(from));
+  const needGas = !isDemo() && !from.native && gasBal <= 0;
+  const addrs = state.addrs;
+
+  const quote = async (silent) => {
+    if (!route || amount <= 0) return;
+    if (!silent) { setQ(null); setBusy('q'); }
+    setErr('');
     try {
-      if (isDemo()) { await new Promise((r) => setTimeout(r, 700)); const out = (amount * priceOf(from)) / (priceOf(to) || 1) * 0.997; setQ({ out, min: out * 0.995, tool: 'Demo' }); }
-      else if (fam === 'evm') setQ(await lifiQuote({ fromNet: from.net, toNet: to.net, from, to, amount, address: state.addrs.evm }));
-      else setQ(await jupQuote(from, to, amount));
-    } catch (e) { setErr(e.message); }
-    setBusy('');
+      let r;
+      if (isDemo()) { await new Promise((x) => setTimeout(x, 500)); const out = (amount * priceOf(from)) / (priceOf(to) || 1) * 0.997; r = { out, min: out * (1 - slip), tool: 'Demo', feeUsd: 0.4, secs: 30 }; }
+      else if (route === 'lifi') r = await lifiQuote({ from, to, amount, fromAddress: addrFor(from.net), toAddress: addrFor(to.net), slippage: slip });
+      else r = await jupQuote(from, to, amount, slip);
+      setQ({ ...r, at: Date.now() });
+    } catch (e) { setErr(e.message); setQ(null); }
+    if (!silent) setBusy('');
   };
+  // авто-котировка: через 0.7 с после ввода и обновление каждые 20 с, чтобы курс был свежим
+  useEffect(() => {
+    setQ(null);
+    if (!route || amount <= 0) return;
+    const d = setTimeout(() => quote(false), 700);
+    const iv = setInterval(() => { if (!busy) quote(true); }, 20000);
+    return () => { clearTimeout(d); clearInterval(iv); };
+  }, [amt, from, to, slip]);
+
   const exec = async () => {
     setBusy('x'); setErr('');
     try {
       if (isDemo()) { await new Promise((r) => setTimeout(r, 900)); setDone('demo'); }
-      else { const k = await currentKeys(); setDone(fam === 'evm' ? await lifiExecute(q, from, from.net, k.evm, amount) : await jupExecute(q, k.sol, state.addrs.sol)); setTimeout(refresh, 4000); }
+      else {
+        const k = await currentKeys();
+        setDone(route === 'lifi' ? await lifiExecute(q, from, k, addrs, amount) : await jupExecute(q, k.sol, addrs.sol));
+        setTimeout(refresh, 5000);
+      }
     } catch (e) { setErr(e.shortMessage || e.message); }
     setBusy('');
   };
-  useEffect(() => { setQ(null); }, [amt, from, to]);
-  if (done) return html`<${Screen} title=${t('swap')}><div class="center result"><div class="okc"><${Icon} n="check" s=${44} w=${2.4}/></div><h2>${t('done')}</h2><p class="dim">${done === 'demo' ? t('swapDemo') : short(done)}</p><${Btn} onClick=${pop}>${t('done')}<//></div><//>`;
+  const impact = q && priceOf(from) && priceOf(to) ? (1 - (q.out * priceOf(to)) / (amount * priceOf(from))) * 100 : 0;
+  const maxAmt = () => setAmt(String(Math.max(0, from.native ? bal - (netOf(from.net).fam === 'evm' ? 0.002 : netOf(from.net).fam === 'tron' ? 1 : 0.01) : bal)).slice(0, 12));
+  if (done) return html`<${Screen} title=${t('swap')}><div class="center result"><div class="okc"><${Icon} n="check" s=${44} w=${2.4}/></div><h2>${t('done')}</h2><p class="dim">${done === 'demo' ? t('swapDemo') : short(done)}</p>${done !== 'demo' && html`<a class="link" href=${explorerTx(from.net, done)} target="_blank" rel="noopener">${t('viewTx')}</a>`}<${Btn} onClick=${pop}>${t('done')}<//></div><//>`;
+  const side = (key, a, onPick) => html`<button class="pill" onClick=${() => setPick(key)}><${Coin} a=${a} s=${26}/>${label(a)}<${Icon} n="down" s=${16}/></button>`;
   return html`<${Screen} title=${t('swap')}>
-    <div class="glass card"><div class="dim small">${t('from')}</div><div class="rowi"><input class="plain big-in" inputmode="decimal" placeholder="0" value=${amt} onInput=${(e) => setAmt(e.target.value.replace(',', '.'))}/><button class="pill" onClick=${() => setPick('from')}><${Coin} a=${from} s=${22}/>${from.sym}<${Icon} n="down" s=${16}/></button></div><div class="dim small">${t('available')}: ${fmtNum(balanceOf(from))} · ${netOf(from.net).name}</div></div>
-    <button class="flip glass" onClick=${() => { setFrom(to); setTo(from); }}><${Icon} n="swap" s=${18}/></button>
-    <div class="glass card"><div class="dim small">${t('toGet')}</div><div class="rowi"><div class="big-in">${q ? fmtNum(q.out) : '0'}</div><button class="pill" onClick=${() => setPick('to')}><${Coin} a=${to} s=${22}/>${to.sym}<${Icon} n="down" s=${16}/></button></div><div class="dim small">${netOf(to.net).name}</div></div>
-    ${q && html`<div class="glass card"><div class="kv"><span class="dim">${t('rate')}</span><b>${fmtNum(q.min)} ${to.sym}</b></div><div class="kv"><span class="dim">${t('via')}</span><b>${q.tool}</b></div></div>`}
-    ${!compatible && html`<p class="err small">${fam === 'sol' ? t('swapSame') : ''}</p>`}
-    ${err && html`<p class="err small">${err.slice(0, 160)}</p>`}
-    <p class="dim small center">${t('swapSupport')}</p>
+    <div class="glass card"><div class="rowi between"><span class="dim small">${t('from')}</span><button class="link tiny" onClick=${maxAmt}>${t('available')}: ${fmtNum(bal)} · ${t('max')}</button></div>
+      <div class="rowi"><input class="plain big-in" inputmode="decimal" placeholder="0" value=${amt} onInput=${(e) => setAmt(e.target.value.replace(',', '.'))}/>${side('from', from)}</div>
+      <div class="dim small">≈ ${fmtFiat(amount * priceOf(from))}</div></div>
+    <button class="flip glass" onClick=${() => { setFrom(to); setTo(from); }} aria-label="swap"><${Icon} n="swap" s=${18}/></button>
+    <div class="glass card"><div class="dim small">${t('toGet')}</div>
+      <div class="rowi"><div class="big-in">${busy === 'q' ? html`<span class="spin"/>` : q ? fmtNum(q.out) : '0'}</div>${side('to', to)}</div>
+      <div class="dim small">${q ? `≈ ${fmtFiat(q.out * priceOf(to))}` : tag(to)}</div></div>
+    <div class="chips left"><span class="dim small" style="align-self:center">${t('slippage')}</span>${[0.005, 0.01, 0.03].map((v) => html`<button class=${slip === v ? 'chip on' : 'chip'} onClick=${() => setSlip(v)}>${v * 100}%</button>`)}</div>
+    ${q && html`<div class="glass card"><div class="kv"><span class="dim">${t('rate')}</span><b>${fmtNum(q.min)} ${to.sym}</b></div><div class="kv"><span class="dim">${t('via')}</span><b>${q.tool}</b></div>${q.feeUsd ? html`<div class="kv"><span class="dim">${t('feeEst')}</span><b>≈ ${fmtFiat(q.feeUsd)}</b></div>` : null}${q.secs ? html`<div class="kv"><span class="dim">${t('time')}</span><b>~${Math.max(1, Math.round(q.secs / 60 * 10) / 10)} ${t('min')}</b></div>` : null}</div>`}
+    ${q && impact > 3 && html`<div class="warn glass"><${Icon} n="warn"/><span>${t('priceImpact', { v: impact.toFixed(1) })}</span></div>`}
+    ${!route && from !== to && html`<p class="err small">${t('swapNoRoute')}</p>`}
+    ${needGas && html`<p class="err small">${t('needGas', { sym: nativeOf(from).sym })}</p>`}
+    ${err && html`<p class="err small">${err.slice(0, 180)}</p>`}
     <div class="grow"/>
-    ${q ? html`<${Btn} busy=${busy === 'x'} onClick=${exec}>${t('doSwap')}<//>` : html`<${Btn} busy=${busy === 'q'} disabled=${amount <= 0 || (from === to) || (fam === 'sol' && !compatible)} onClick=${quote}>${t('getQuote')}<//>`}
-    ${pick && html`<${Sheet} title=${t('chooseAsset')} onClose=${() => setPick(null)}><div class="list">${list.map((a) => html`<button class="row" key=${assetId(a)} onClick=${() => { (pick === 'from' ? setFrom : setTo)(a); setPick(null); }}><${Coin} a=${a} s=${36}/><div class="grow-l"><b>${a.sym}</b><span class="dim">${netOf(a.net).name}</span></div></button>`)}</div><//>`}
+    <${Btn} busy=${busy === 'x'} disabled=${!q || !route || amount <= 0 || amount > bal + 1e-12 || busy === 'q'} onClick=${exec}>${amount > bal ? t('insufficient') : t('doSwap')}<//>
+    ${pick && html`<${Sheet} title=${t('chooseAsset')} onClose=${() => setPick(null)}><div class="list">${list.map((a) => html`<button class="row" key=${assetId(a)} onClick=${() => { (pick === 'from' ? setFrom : setTo)(a); setPick(null); }}><${Coin} a=${a} s=${36}/><div class="grow-l"><b>${a.sym}</b><span class="dim">${tag(a)}</span></div><div class="right"><span class="dim">${fmtNum(balanceOf(a))}</span></div></button>`)}</div><//>`}
   <//>`;
 }
 
@@ -91,14 +130,28 @@ export function NftTab() {
 // ---------------- РЫНОК ----------------
 export function MarketTab() {
   const [rows, setRows] = useState(null), [q, setQ] = useState('');
+  const prev = useRef({});
+  const [flash, setFlash] = useState({});
   useEffect(() => {
-    if (isDemo()) return setRows([['Bitcoin', 'BTC', 100200, 1.2], ['Ethereum', 'ETH', 2650, -0.4], ['Solana', 'SOL', 145, 5.1], ['TON', 'TON', 3.1, 0.8], ['Tron', 'TRX', 0.27, -1.1]].map(([name, symbol, p, c]) => ({ name, symbol, current_price: p, price_change_percentage_24h: c })));
-    getMarket(state.s.fiat).then(setRows).catch(() => setRows([]));
+    let off = false;
+    const load = async () => {
+      if (isDemo()) return setRows([['Bitcoin', 'BTC', 100200, 1.2], ['Ethereum', 'ETH', 2650, -0.4], ['Solana', 'SOL', 145, 5.1], ['TON', 'TON', 3.1, 0.8], ['Tron', 'TRX', 0.27, -1.1]].map(([name, symbol, p, c]) => ({ name, symbol, current_price: p, price_change_percentage_24h: c })));
+      try {
+        const d = await getMarket(state.s.fiat);
+        if (off) return;
+        const fl = {};
+        for (const r of d) { const o = prev.current[r.symbol]; if (o !== undefined && o !== r.current_price) fl[r.symbol] = r.current_price > o ? 'up' : 'down'; prev.current[r.symbol] = r.current_price; }
+        setFlash(fl); setRows(d);
+      } catch { if (!off) setRows((x) => x || []); }
+    };
+    load();
+    const iv = setInterval(() => { if (!document.hidden) load(); }, 8000);
+    return () => { off = true; clearInterval(iv); };
   }, [state.s.mode, state.s.fiat]);
   const f = (rows || []).filter((r) => (r.name + r.symbol).toLowerCase().includes(q.toLowerCase()));
-  return html`<div class="tab"><h2>${t('marketTitle')}</h2>
+  return html`<div class="tab"><h2>${t('marketTitle')}${!isDemo() && html`<span class="live"><i/>LIVE</span>`}</h2>
     <input class="field glass" placeholder=${t('search')} value=${q} onInput=${(e) => setQ(e.target.value)}/>
-    <div class="list">${f.map((r) => html`<div class="row glass">${r.image ? html`<img class="coin" src=${r.image} alt="" width="40" height="40"/>` : html`<${Coin} a=${{ sym: r.symbol.toUpperCase(), color: '#444' }}/>`}<div class="grow-l"><b>${r.symbol.toUpperCase()}</b><span class="dim">${r.name}</span></div><div class="right"><b>${fmtFiat(r.current_price, r.current_price < 1 ? 4 : 2)}</b><span class=${r.price_change_percentage_24h >= 0 ? 'up' : 'down'}>${pct(r.price_change_percentage_24h)}</span></div></div>`)}</div><div style="height:110px"/></div>`;
+    <div class="list">${f.map((r) => html`<div class="row glass" key=${r.symbol}><${Coin} a=${{ sym: r.symbol.toUpperCase(), color: '#444' }}/><div class="grow-l"><b>${r.symbol.toUpperCase()}</b><span class="dim">${r.name}</span></div><div class="right"><b class=${flash[r.symbol] ? `flash-${flash[r.symbol]}` : ''} key=${r.current_price}>${fmtFiat(r.current_price, r.current_price < 1 ? 4 : 2)}</b><span class=${r.price_change_percentage_24h >= 0 ? 'up' : 'down'}>${pct(r.price_change_percentage_24h)}</span></div></div>`)}</div><div style="height:110px"/></div>`;
 }
 
 // ---------------- НАСТРОЙКИ ----------------

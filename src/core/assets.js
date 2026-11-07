@@ -51,3 +51,24 @@ export function assetList(testnets = false, custom = []) {
 
 // удобные заглушки для чисел
 export const famOfNet = (id) => netOf(id)?.fam;
+
+TOKENS.forEach((x) => { if (x.sym === 'USDT' && (x.net === 'tron' || x.net === 'eth')) x.pin = true; });
+
+// Стандарт токена для подписи: USDT · TRC20
+const STD = { eth: 'ERC20', bsc: 'BEP20', pol: 'Polygon', arb: 'Arbitrum', opt: 'Optimism', base: 'Base', sol: 'SPL', tron: 'TRC20', sepolia: 'Sepolia' };
+export const stdOf = (a) => STD[a.net] || '';
+export const tag = (a) => (a.native ? netOf(a.net).name : `${a.name} · ${stdOf(a)}`);
+export const label = (a) => (a.native ? a.sym : `${a.sym} · ${stdOf(a)}`);
+
+// Настоящие логотипы: Trust Wallet assets (по сети/контракту), запасной вариант — набор cryptocurrency-icons.
+// Картинки грузятся браузером пользователя напрямую, ничего не вшито в приложение.
+const TW = 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains';
+const TWF = { eth: 'ethereum', bsc: 'smartchain', pol: 'polygon', arb: 'arbitrum', opt: 'optimism', base: 'base', btc: 'bitcoin', sol: 'solana', ton: 'ton', tron: 'tron', sepolia: 'ethereum' };
+export const chainLogo = (net) => `${TW}/${TWF[net] || 'ethereum'}/info/logo.png`;
+export const iconUrls = (a) => {
+  const net = a.net || a.id, out = [];
+  if (a.contract) out.push(`${TW}/${TWF[net]}/assets/${a.contract}/logo.png`);
+  else if (net) out.push(chainLogo(a.sym === 'ETH' ? 'eth' : net));
+  if (a.sym) out.push(`https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@0.18.1/svg/color/${a.sym.toLowerCase()}.svg`);
+  return out;
+};
