@@ -3,7 +3,7 @@ import { AccountButton, BioOffer } from './accounts.js';
 import { Mark } from './mark.js';
 import { Widgets } from './widgets.js';
 import { getAccount } from '../core/accounts.js';
-import { html, Icon, Coin, Screen, Btn, Sheet, Chart, Keypad, QR, Scanner, fmtFiat, fmtNum, short, pct, ago, copyText, haptic } from './common.js';
+import { html, Icon, Coin, Screen, Btn, Sheet, Chart, Keypad, QR, Scanner, fmtFiat, fmtNum, short, pct, ago, copyText, haptic, isIos, standalone } from './common.js';
 import { t } from '../i18n.js';
 import { state, push, pop, bump, assets, balanceOf, priceOf, changeOf, valueOf, total, addrFor, refresh, currentKeys, toast, setSettings } from '../store.js';
 import { netOf, assetId, tag, label } from '../core/assets.js';
@@ -42,6 +42,7 @@ export function Home() {
     <div class="list">${list.map((a) => html`<button class="row glass" key=${assetId(a)} onClick=${() => push('asset', { id: assetId(a) })}>
       <${Coin} a=${a}/><div class="grow-l"><b>${a.sym}</b><span class="dim">${tag(a)}</span></div>
       <div class="right"><b>${fmtFiat(valueOf(a))}</b><span class=${changeOf(a) >= 0 ? 'up' : 'down'}>${fmtNum(balanceOf(a))} · ${pct(changeOf(a))}</span></div></button>`)}</div>
+    ${isIos && !standalone && !localStorage.getItem('noir.installnote') && html`<div class="glass card note"><b>${t('installNoteTitle')}</b><p class="dim small">${t('installNote')}</p><button class="link" onClick=${(e) => { try { localStorage.setItem('noir.installnote', '1'); } catch {} e.currentTarget.closest('.note').remove(); }}>${t('gotIt')}</button></div>`}
     <${Widgets}/>
     <h3>${t('activity')}</h3>
     <${PendingList}/>

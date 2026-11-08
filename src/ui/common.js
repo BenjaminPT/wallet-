@@ -165,3 +165,14 @@ export function Scanner({ onResult, onClose }) {
   }, []);
   return html`<${Sheet} title=${t('scan')} onClose=${onClose}><div class="scan"><video ref=${v} playsinline muted/><div class="scan-frame"/></div>${err && html`<p class="dim">${err}</p>`}<//>`;
 }
+
+// Сохранить текстовый файл: на телефоне через системное меню «Поделиться», иначе обычная загрузка
+export async function saveTextFile(name, text) {
+  const file = new File([text], name, { type: 'application/json' });
+  try { if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title: name }); return; } } catch (e) { if (e?.name === 'AbortError') return; }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+export const isIos = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+export const standalone = !!(navigator.standalone || matchMedia('(display-mode: standalone)').matches);

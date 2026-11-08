@@ -187,3 +187,6 @@ body.sheet-open .tabbar{transform:translateY(140%);opacity:0;pointer-events:none
 .wd-big{font-size:28px;font-weight:700;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
 .wd-row{display:flex;align-items:center;gap:8px;font-size:14px;font-variant-numeric:tabular-nums}.wd-row .grow{flex:1}
 .wd-rates{gap:5px}
+
+.file-btn{display:flex;align-items:center;justify-content:center;cursor:pointer}
+.note{padding:14px 16px;display:flex;flex-direction:column;gap:6px}.note p{margin:0}

@@ -82,6 +82,14 @@ await step('transfer', async () => {
   const v = await p.inputValue('.plain'); if (v.length < 20) throw new Error('адрес получателя не подставился');
   await shot('15-transfer-send'); await p.click('.icon-btn.glass');
 });
+await step('backup', async () => {
+  await tab(3); await p.waitForTimeout(400);
+  const [dl] = await Promise.all([p.waitForEvent('download', { timeout: 8000 }).catch(() => null), p.click('text=Сохранить резервную копию')]);
+  if (!dl) throw new Error('резервная копия не скачалась');
+  const path = await dl.path(); const txt = (await import('node:fs')).readFileSync(path, 'utf8');
+  if (!txt.includes('noir-wallet') || /abandon|seed/.test(txt)) throw new Error('странный файл резервной копии');
+  await tab(0);
+});
 await step('lock', async () => {
   await tab(3); await p.click('text=Заблокировать'); await p.waitForSelector('input[type=password]'); await shot('16-locked');
   await p.click('text=Сменить аккаунт'); await p.waitForSelector('.row.acc'); await shot('17-accounts');

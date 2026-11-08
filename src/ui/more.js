@@ -6,6 +6,8 @@ import { netOf, assetId, tag, label } from '../core/assets.js';
 import { explorerTx } from '../core/chains.js';
 import { lifiQuote, lifiExecute, jupQuote, jupExecute, lidoStake, lidoApr, getMarket, getIconMap } from '../core/market.js';
 import { Avatar } from './accounts.js';
+import { exportBackup } from '../core/accounts.js';
+import { isIos, standalone, saveTextFile } from './common.js';
 import { WIDGET_IDS } from './widgets.js';
 import { getAccount, unlockAccount, changeAccountPassword, renameAccount, listAccounts } from '../core/accounts.js';
 import { TermsSheet } from './auth.js';
@@ -169,7 +171,8 @@ const SRow = ({ ic, label, hint, right, onClick, danger }) => {
 export function SettingsTab() {
   const s = state.s;
   const [sheet, setSheet] = useState(null);
-  const [bioOk, setBioOk] = useState(false), [, force] = useState(0);
+  const [bioOk, setBioOk] = useState(false), [, force] = useState(0), [persisted, setPersisted] = useState(null);
+  useEffect(() => { navigator.storage?.persisted?.().then(setPersisted).catch(() => {}); }, []);
   const acc = getAccount(state.account), bioOn = bioEnabled(state.account);
   useEffect(() => { bioAvailable().then(setBioOk); }, []);
   const toggleBio = async (v) => { if (!bioOk) return toast(t('bioUnsupported')); try { if (v) { await bioEnable(state.account, state.mnemonic, acc?.name); toast(t('bioOnToast')); } else bioDisable(state.account); force((n) => n + 1); } catch { toast(t('bioFail')); } };
@@ -187,6 +190,11 @@ export function SettingsTab() {
       <${SRow} ic="market" label=${t('currency')} right=${html`<${Seg} value=${s.fiat} options=${[['usd', 'USD'], ['eur', 'EUR'], ['rub', 'RUB']]} onChange=${(v) => setSettings({ fiat: v })}/>`}/>
       <${SRow} ic="eye" label=${t('appIcon')} right=${html`<${Seg} value=${s.icon || 'dark'} options=${[['dark', t('iconDark')], ['light', t('iconLight')]]} onChange=${(v) => setSettings({ icon: v })}/>`}/>
       <${SRow} ic="swap" label=${t('testnets')} right=${html`<${Switch} on=${s.testnets} label=${t('testnets')} onChange=${(v) => setSettings({ testnets: v })}/>`}/>
+    <//>
+
+    <${Group} title=${t('backupTitle')}>
+      <${SRow} ic="key" label=${t('backupSave')} hint=${t('backupHint')} onClick=${async () => { await saveTextFile(`noir-backup-${new Date().toISOString().slice(0, 10)}.json`, exportBackup()); toast(t('backupDone')); }}/>
+      <${SRow} ic="lock" label=${t('storageTitle')} hint=${persisted === false || (isIos && !standalone) ? t('storageWarn') : t('storageOk')}/>
     <//>
 
     <${Group} title=${t('widgetsTitle')}>

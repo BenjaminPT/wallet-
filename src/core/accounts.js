@@ -76,3 +76,28 @@ export function setAccountColor(id, color) {
   const a = d.list.find((x) => x.id === id);
   if (a && Number.isInteger(color) && color >= 0 && color < COLORS.length) { a.color = color; write(d); }
 }
+
+// ---------- Резервная копия: зашифрованные хранилища (пароли остаются прежними, seed в файле только в зашифрованном виде)
+export function exportBackup() {
+  const d = read();
+  return JSON.stringify({ app: 'noir-wallet', v: 1, created: new Date().toISOString(), accounts: d.list.map(({ name, addr, addrs, color, blob }) => ({ name, addr, addrs, color, blob })) });
+}
+const okBlob = (b) => b && b.v === 1 && Number.isInteger(b.iter) && b.iter >= 100000 && b.iter <= 3000000 && ['salt', 'iv', 'ct'].every((k) => typeof b[k] === 'string' && b[k].length > 8 && b[k].length < 4096);
+// Возвращает { added, skipped, firstId }. Дубликаты (тот же адрес или то же шифрование) пропускаются.
+export function importBackup(text) {
+  if (typeof text !== 'string' || text.length > 2e6) throw new Error('bad_backup');
+  let j; try { j = JSON.parse(text); } catch { throw new Error('bad_backup'); }
+  if (j?.app !== 'noir-wallet' || !Array.isArray(j.accounts) || !j.accounts.length || j.accounts.length > 50) throw new Error('bad_backup');
+  const d = read(); let added = 0, skipped = 0, firstId = null;
+  for (const a of j.accounts) {
+    if (!okBlob(a?.blob)) { skipped++; continue; }
+    const addr = typeof a.addr === 'string' && /^0x[0-9a-fA-F]{40}$/.test(a.addr) ? a.addr : null;
+    if (d.list.some((x) => (addr && x.addr && x.addr.toLowerCase() === addr.toLowerCase()) || x.blob?.ct === a.blob.ct)) { skipped++; continue; }
+    const id = newId();
+    const addrs = a.addrs && typeof a.addrs === 'object' ? Object.fromEntries(Object.entries(a.addrs).filter(([k, v]) => /^[a-z]{2,6}$/.test(k) && typeof v === 'string' && v.length < 128)) : null;
+    d.list.push({ id, name: String(a.name || 'Account').slice(0, 24), addr, addrs, color: Number.isInteger(a.color) ? a.color % COLORS.length : 0, blob: a.blob });
+    firstId = firstId || id; added++;
+  }
+  if (added) { d.active = firstId; write(d); }
+  return { added, skipped, firstId };
+}

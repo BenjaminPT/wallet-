@@ -49,7 +49,7 @@ export function AccountsSheet({ onClose }) {
       <button class="icon-btn" aria-label=${t('editAccount')} onClick=${() => { setEditId(a.id); setView('edit'); }}><${Icon} n="key" s=${18}/></button></div>`)}</div>
     ${others.length > 0 && html`<${Btn} onClick=${() => setView('transfer')}>${t('transferTitle')}<//>`}
     <${Btn} kind="ghost" onClick=${() => { onClose(); push('setPass', { mode: 'create' }); }}>${t('addAccountNew')}<//>
-    <button class="link center" onClick=${() => { onClose(); push('import'); }}>${t('signInFull')}</button>
+    <button class="link center" onClick=${() => { onClose(); push('signin'); }}>${t('signInFull')}</button>
   <//>`;
 }
 

@@ -3,12 +3,12 @@ import { html, Icon, Screen, Btn, Sheet, haptic } from './common.js';
 import { TERMS } from '../legal.js';
 import { getLang } from '../i18n.js';
 import { t } from '../i18n.js';
-import { push, pop, createVault, unlock, unlockBiometric, switchAccount, isUnlocked, hasAccounts, setSettings, resetTo, state } from '../store.js';
+import { push, pop, createVault, afterRestore, unlock, unlockBiometric, switchAccount, isUnlocked, hasAccounts, setSettings, resetTo, state } from '../store.js';
 import { bioEnabled, bioAvailable } from '../core/bio.js';
 import { Mark } from './mark.js';
-import { listAccounts, getAccount } from '../core/accounts.js';
+import { importBackup, listAccounts, getAccount } from '../core/accounts.js';
 const short = (a) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : '');
-const signIn = () => push(hasAccounts() ? 'accounts' : 'import');
+const signIn = () => push(hasAccounts() ? 'accounts' : 'signin');
 import { useEffect } from 'preact/hooks';
 import { newMnemonic, isValidMnemonic, normalize } from '../core/vault.js';
 
@@ -95,6 +95,27 @@ export function Import() {
   <//>`;
 }
 
+export function SignIn() {
+  const [err, setErr] = useState('');
+  const pick = async (e) => {
+    const f = e.target.files?.[0]; if (!f) return;
+    try {
+      if (f.size > 2e6) throw new Error('bad_backup');
+      const r = importBackup(await f.text());
+      if (!r.added) return setErr(t('restoreNone'));
+      afterRestore(r.firstId);
+    } catch { setErr(t('restoreBad')); }
+  };
+  return html`<${Screen} title=${t('signInFull')}>
+    <p class="dim">${t('signInWhy')}</p>
+    <label class="btn primary file-btn">${t('restoreBackup')}<input type="file" accept=".json,application/json" hidden onChange=${pick}/></label>
+    <p class="dim small">${t('restoreDesc')}</p>
+    ${err && html`<p class="err">${err}</p>`}
+    <${Btn} kind="ghost" onClick=${() => push('import')}>${t('enterSeed')}<//>
+    <p class="dim small">${t('enterSeedDesc')}</p>
+  <//>`;
+}
+
 export function Accounts() {
   const list = listAccounts(), act = state.account;
   const first = state.stack.length < 2;
@@ -106,7 +127,7 @@ export function Accounts() {
       <span class="dim small">${a.id === act ? t('active') : isUnlocked(a.id) ? t('unlockedLbl') : ''}</span></button>`)}</div>
     <div class="grow"/>
     <${Btn} onClick=${() => push('setPass', { mode: 'create' })}>${t('addAccountNew')}<//>
-    <${Btn} kind="ghost" onClick=${() => push('import')}>${t('signInFull')}<//>
+    <${Btn} kind="ghost" onClick=${() => push('signin')}>${t('signInFull')}<//>
   <//>`;
 }
 

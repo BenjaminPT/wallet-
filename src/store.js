@@ -77,6 +77,7 @@ function armLock() {
 document.addEventListener?.('visibilitychange', () => { if (document.hidden && S.s.mode === 'real' && S.s.autolock === 0) lock(); });
 
 export function init() {
+  try { navigator.storage?.persist?.(); } catch {}
   S.deeplink = (location.hash || '').replace('#', '');
   applyIcon();
   const mid = migrateLegacy(t('mainAccount')); if (mid) bioMigrate(mid);
@@ -234,3 +235,6 @@ setInterval(pollPending, 10000);
 
 // Ярлыки с иконки (#send, #receive, #market): применяются после входа, когда открыт главный экран
 export const takeDeeplink = () => { const d = S.deeplink; S.deeplink = ''; try { history.replaceState(null, '', location.pathname); } catch {} return d; };
+
+// После восстановления из резервной копии: сразу к вводу пароля восстановленного аккаунта
+export function afterRestore(id) { syncAccounts(); return switchAccount(id); }

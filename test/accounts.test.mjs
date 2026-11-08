@@ -43,3 +43,19 @@ test('миграция старого одиночного хранилища', 
   assert.equal(await A.unlockAccount(id, 'legacy-pass-123'), M2);
   assert.ok(A.getAccount(id).addrs.evm, 'адреса досчитаны при первом входе');
 });
+
+test('резервная копия: восстановление с прежним паролем, дубликаты и мусор отклоняются', async () => {
+  mem.clear();
+  const a = await A.addAccount({ name: 'Основной аккаунт', password: 'backup-pass-123', mnemonic: M1 });
+  const file = A.exportBackup();
+  assert.ok(!file.includes('abandon'), 'seed в файле только зашифрованный');
+  mem.clear(); // «новое устройство»
+  const r = A.importBackup(file);
+  assert.equal(r.added, 1);
+  assert.equal(await A.unlockAccount(r.firstId, 'backup-pass-123'), M1);
+  assert.equal(A.importBackup(file).added, 0, 'повторный импорт не дублирует');
+  assert.throws(() => A.importBackup('{"app":"x"}'), /bad_backup/);
+  assert.throws(() => A.importBackup('not json'), /bad_backup/);
+  const evil = JSON.parse(file); evil.accounts[0].blob.iter = 2e9; evil.accounts[0].blob.ct = 'zzzzzzzzzz';
+  assert.equal(A.importBackup(JSON.stringify(evil)).added, 0, 'огромное число итераций PBKDF2 отклоняется');
+});
