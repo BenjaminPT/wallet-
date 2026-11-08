@@ -13,7 +13,7 @@ export const TERMS = {
       ['8. Privacy', 'We do not run a server that collects your data. Your encrypted wallet and settings are stored locally on your device. Browser storage can be erased by you, your browser, or the system; back up your seed phrase offline.'],
       ['9. Changes', 'The software and these terms may change at any time. Continued use means you accept the current terms.'],
       ['10. Contact & law', 'Questions: see the project repository. Governing law and venue: the jurisdiction of the operator, to the extent permitted by mandatory law of your country.'],
-      ['11. Fees and card purchases', 'Noir may charge a service fee on outgoing transfers. The current rate and amount are shown on the confirmation screen before you sign; the recipient receives exactly the amount you enter. Transfers between your own accounts in the app are free. Network (gas) fees go to the blockchain, not to us. Card purchases are provided by third-party partners, who process payment, identity checks and their own fees under their terms; we do not receive your payment details. Fee rates may change.'],
+      ['11. Fees', 'Noir may charge a service fee on outgoing transfers. The current rate and amount are shown on the confirmation screen before you sign; the recipient receives exactly the amount you enter. Transfers between your own accounts in the app are free. Network (gas) fees go to the blockchain, not to us. Fee rates may change.'],
     ],
   },
   ru: {
@@ -29,7 +29,7 @@ export const TERMS = {
       ['8. Конфиденциальность', 'У нас нет сервера, который собирает ваши данные. Зашифрованный кошелёк и настройки хранятся локально на вашем устройстве. Хранилище браузера может быть очищено вами, браузером или системой, поэтому храните seed-фразу на бумаге.'],
       ['9. Изменения', 'Программа и эти условия могут измениться в любой момент. Продолжая использование, вы принимаете действующую версию условий.'],
       ['10. Контакты и право', 'Вопросы: см. репозиторий проекта. Применимое право и подсудность: юрисдикция оператора в пределах, допускаемых императивными нормами права вашей страны.'],
-      ['11. Комиссии и покупка картой', 'Noir может взимать сервисную комиссию с исходящих переводов. Текущая ставка и сумма показываются на экране подтверждения до подписи; получатель получает ровно введённую вами сумму. Переводы между вашими аккаунтами в приложении бесплатны. Сетевые комиссии (газ) уходят блокчейну, а не нам. Покупка картой предоставляется сторонними партнёрами: они обрабатывают платёж, проверку личности и свои комиссии по своим условиям, мы не получаем ваши платёжные данные. Ставки могут меняться.'],
+      ['11. Комиссии', 'Noir может взимать сервисную комиссию с исходящих переводов. Текущая ставка и сумма показываются на экране подтверждения до подписи; получатель получает ровно введённую вами сумму. Переводы между вашими аккаунтами в приложении бесплатны. Сетевые комиссии (газ) уходят блокчейну, а не нам. Ставки могут меняться.'],
     ],
   },
 };

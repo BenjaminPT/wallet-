@@ -39,7 +39,6 @@ export function Home() {
     <${Chart} data=${data} onCursor=${setCursor}/>
     <div class="chips">${PERIODS.map(([k, d]) => html`<button class=${days === d ? 'chip on' : 'chip'} onClick=${() => { haptic(); setDays(d); }}>${t(k)}</button>`)}</div>
     <div class="actions coach-2">${acts.map(([ic, k, fn]) => html`<button class="act glass" onClick=${fn}><${Icon} n=${ic} s=${22}/><span>${t(k)}</span></button>`)}</div>
-    <button class="link center" onClick=${() => push('buy')}>${t('buyTitle')}</button>
     <h3>${t('assets')}</h3>
     <div class="list">${list.map((a) => html`<button class="row glass" key=${assetId(a)} onClick=${() => push('asset', { id: assetId(a) })}>
       <${Coin} a=${a}/><div class="grow-l"><b>${a.sym}</b><span class="dim">${tag(a)}</span></div>
