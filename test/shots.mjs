@@ -51,7 +51,10 @@ await step('mainname', async () => {
 await step('asset', async () => { await p.click('.list .row >> nth=0'); await p.waitForSelector('.screen .big'); await p.waitForTimeout(1200); await shot('07-asset'); await p.click('.icon-btn.glass'); });
 await step('receive', async () => { await p.click('.act >> nth=1'); await p.waitForSelector('.sheet'); await p.click('.sheet .row >> nth=0'); await p.waitForSelector('.qr'); await shot('08-receive'); await p.click('.icon-btn.glass'); });
 await step('tabs', async () => {
-  await tab(1); await p.waitForTimeout(700); await shot('09-market');
+  await tab(1); await p.waitForSelector('.coin-row', { timeout: 15000 }); await shot('09-market');
+  await p.click('.coin-row >> nth=0'); await p.waitForSelector('.coin-head'); await p.waitForTimeout(1500); await shot('09b-coin-1d');
+  await p.click('.chips .chip:text-is("30D")'); await p.waitForTimeout(1200); await shot('09c-coin-30d');
+  await p.click('.icon-btn.glass'); await p.waitForSelector('.coin-row');
   await tab(2); await p.waitForTimeout(700); await shot('10-nft');
   if (!(await p.textContent('.tab')).includes('бета')) throw new Error('у NFT нет пометки теста');
   await tab(3); await p.waitForTimeout(700); await shot('11-settings');

@@ -53,7 +53,12 @@ export function getPrices(ids, fiat = 'usd') {
         if (id) out[id] = { p: Number(r.lastPrice) * fx, ch: Number(r.priceChangePercent) };
       }
     } catch { /* Binance недоступен (регион/сеть) — берём CoinGecko */ }
-    const missing = list.filter((id) => !out[id] && !STABLE.has(id));
+    // токены из каталога (id вида lf:<chainId>:<адрес>): цена из LI.FI
+    await Promise.all(list.filter((id) => id.startsWith('lf:')).map(async (id) => {
+      const [, chain, addr] = id.split(':');
+      try { const r = await getJson(`https://li.quest/v1/token?chain=${chain}&token=${addr}`); if (Number(r.priceUSD) > 0) out[id] = { p: Number(r.priceUSD) * fx, ch: 0 }; } catch {}
+    }));
+    const missing = list.filter((id) => !out[id] && !STABLE.has(id) && !id.startsWith('lf:'));
     if (missing.length) {
       const d = await getJson(`${CG}/simple/price?ids=${missing.join(',')}&vs_currencies=${fiat}&include_24hr_change=true`);
       for (const k in d) out[k] = { p: d[k][fiat], ch: d[k][`${fiat}_24h_change`] || 0 };
@@ -63,7 +68,7 @@ export function getPrices(ids, fiat = 'usd') {
 }
 
 // days: 1 | 7 | 30 | 365 -> [[ts, price], ...]
-const KL = { 1: ['15m', 96], 7: ['1h', 168], 30: ['4h', 180], 365: ['1d', 365] };
+const KL = { 1: ['15m', 96], 7: ['1h', 168], 30: ['4h', 180], 90: ['4h', 540], 365: ['1d', 365] };
 export function getChart(id, days, fiat = 'usd') {
   return cached(`c:${id}:${days}:${fiat}`, 60000, async () => {
     if (STABLE.has(id)) { const fx = await fiatRate(fiat); const now = Date.now(); return Array.from({ length: 40 }, (_, i) => [now - (40 - i) * 3600e3, fx]); }
@@ -81,6 +86,22 @@ export function getChart(id, days, fiat = 'usd') {
 
 // Вкладка «Рынок»: топ монет по Binance, обновляется каждые несколько секунд
 const TOP = { BTC: 'Bitcoin', ETH: 'Ethereum', BNB: 'BNB', SOL: 'Solana', XRP: 'XRP', DOGE: 'Dogecoin', TON: 'Toncoin', TRX: 'Tron', ADA: 'Cardano', AVAX: 'Avalanche', LINK: 'Chainlink', DOT: 'Polkadot', POL: 'Polygon', LTC: 'Litecoin', BCH: 'Bitcoin Cash', ATOM: 'Cosmos', UNI: 'Uniswap', NEAR: 'NEAR', APT: 'Aptos', ARB: 'Arbitrum', OP: 'Optimism', SUI: 'Sui', ETC: 'Ethereum Classic', XLM: 'Stellar', FIL: 'Filecoin', AAVE: 'Aave', INJ: 'Injective', PEPE: 'Pepe', SHIB: 'Shiba Inu', WLD: 'Worldcoin', HBAR: 'Hedera', ICP: 'Internet Computer', VET: 'VeChain', ALGO: 'Algorand', RENDER: 'Render', TAO: 'Bittensor', ONDO: 'Ondo', SEI: 'Sei', TIA: 'Celestia', MKR: 'Maker', CRV: 'Curve', LDO: 'Lido DAO', SAND: 'The Sandbox', MANA: 'Decentraland', AXS: 'Axie Infinity', GRT: 'The Graph', FET: 'Fetch.ai', STX: 'Stacks', IMX: 'Immutable', GALA: 'Gala', FLOW: 'Flow', EGLD: 'MultiversX', XTZ: 'Tezos', EOS: 'EOS', THETA: 'Theta', RUNE: 'THORChain', SNX: 'Synthetix', COMP: 'Compound', ENS: 'ENS', CHZ: 'Chiliz', APE: 'ApeCoin', BONK: 'Bonk', FLOKI: 'Floki', JUP: 'Jupiter', PYTH: 'Pyth', ENA: 'Ethena', TRUMP: 'Official Trump', PENDLE: 'Pendle', WIF: 'dogwifhat', ARKM: 'Arkham', JTO: 'Jito', STRK: 'Starknet', MINA: 'Mina', KAS: 'Kaspa', NEO: 'Neo', ZEC: 'Zcash', DASH: 'Dash', XMR: 'Monero', BAT: 'Basic Attention', ZRX: '0x', YFI: 'yearn.finance', SUSHI: 'SushiSwap', CAKE: 'PancakeSwap', DYDX: 'dYdX', GMX: 'GMX', LRC: 'Loopring', ANKR: 'Ankr', QNT: 'Quant', ROSE: 'Oasis', ZIL: 'Zilliqa', IOTA: 'IOTA', KSM: 'Kusama', WOO: 'WOO', AR: 'Arweave', BLUR: 'Blur' };
+// Последний список монет хранится на устройстве: вкладка «Рынок» показывает его мгновенно, пока грузится свежий
+const MKEY = 'noir.market.v1';
+export function marketCache(fiat) { try { const c = JSON.parse(localStorage.getItem(MKEY)); if (c?.fiat === fiat && Array.isArray(c.rows) && c.rows.length) return c.rows; } catch {} return null; }
+const saveMarket = (fiat, rows) => { try { localStorage.setItem(MKEY, JSON.stringify({ fiat, t: Date.now(), rows })); } catch {} };
+
+// График по тикеру Binance (для любой монеты из вкладки «Рынок»)
+export async function getSymChart(sym, days, fiat = 'usd') {
+  const [iv, n] = KL[days] || KL[7];
+  const fx = await fiatRate(fiat);
+  return (await getJson(`${BN}/klines?symbol=${sym}USDT&interval=${iv}&limit=${n}`)).map((k) => [k[0], Number(k[4]) * fx]);
+}
+export async function getTicker(sym, fiat = 'usd') {
+  const fx = await fiatRate(fiat), r = await getJson(`${BN}/ticker/24hr?symbol=${sym}USDT`);
+  return { price: Number(r.lastPrice) * fx, ch: Number(r.priceChangePercent), high: Number(r.highPrice) * fx, low: Number(r.lowPrice) * fx, vol: Number(r.quoteVolume) * fx };
+}
+
 export async function getMarket(fiat = 'usd') {
   const key = `m:${fiat}`;
   const fx = await fiatRate(fiat);
@@ -92,6 +113,7 @@ export async function getMarket(fiat = 'usd') {
     }
     const out = rows.map((r) => { const s = r.symbol.replace(/USDT$/, ''); return { name: TOP[s], symbol: s, current_price: Number(r.lastPrice) * fx, price_change_percentage_24h: Number(r.priceChangePercent), vol: Number(r.quoteVolume) }; });
     out.sort((a, b) => b.vol - a.vol);
+    saveMarket(fiat, out);
     return out;
   } catch {
     return cached(key, 60000, async () => getJson(`${CG}/coins/markets?vs_currency=${fiat}&order=market_cap_desc&per_page=30&page=1&sparkline=false&price_change_percentage=24h`));
@@ -229,3 +251,27 @@ export async function getIconMap() {
   } catch { /* лимит или офлайн: останутся запасные источники */ }
   return m;
 }
+
+// ---------- Каталог токенов (LI.FI): адреса и логотипы берутся из каталога, а не набираются вручную ----------
+const LF_NET = { 1: 'eth', 56: 'bsc', 137: 'pol', 42161: 'arb', 10: 'opt', 8453: 'base', 1151111081099710: 'sol', 728126428: 'tron' };
+let catalog;
+export function loadCatalog() {
+  catalog = catalog || (async () => {
+    const d = await getJson(`https://li.quest/v1/tokens?chains=${Object.keys(LF_NET).join(',')}`);
+    const out = [];
+    for (const [cid, list] of Object.entries(d.tokens || {})) {
+      const net = LF_NET[cid]; if (!net) continue;
+      for (const x of list) {
+        if (!x.address || !x.symbol || !(Number(x.priceUSD) > 0) || !x.logoURI || /^0x0{40}$/.test(x.address)) continue; // без цены и логотипа: чаще всего мусорные токены
+        out.push({ net, chain: Number(cid), contract: x.address, sym: String(x.symbol).slice(0, 12), name: String(x.name || x.symbol).slice(0, 40), decimals: Number(x.decimals), img: /^https:\/\//.test(x.logoURI) ? x.logoURI : null, usd: Number(x.priceUSD) });
+      }
+    }
+    return out;
+  })().catch((e) => { catalog = null; throw e; });
+  return catalog;
+}
+export const searchCatalog = (all, q, limit = 40) => {
+  const s = q.trim().toLowerCase(); if (!s) return all.slice().sort((a, b) => b.usd * 0 + (a.sym < b.sym ? -1 : 1)).slice(0, limit);
+  const sc = (x) => (x.sym.toLowerCase() === s ? 0 : x.contract.toLowerCase() === s ? 0 : x.sym.toLowerCase().startsWith(s) ? 1 : x.name.toLowerCase().startsWith(s) ? 2 : (x.sym + x.name).toLowerCase().includes(s) ? 3 : 9);
+  return all.filter((x) => sc(x) < 9).sort((a, b) => sc(a) - sc(b) || a.sym.length - b.sym.length).slice(0, limit);
+};

@@ -42,6 +42,7 @@ export function Home() {
     <div class="list">${list.map((a) => html`<button class="row glass" key=${assetId(a)} onClick=${() => push('asset', { id: assetId(a) })}>
       <${Coin} a=${a}/><div class="grow-l"><b>${a.sym}</b><span class="dim">${tag(a)}</span></div>
       <div class="right"><b>${fmtFiat(valueOf(a))}</b><span class=${changeOf(a) >= 0 ? 'up' : 'down'}>${fmtNum(balanceOf(a))} · ${pct(changeOf(a))}</span></div></button>`)}</div>
+    <button class="link center" onClick=${() => push('catalog')}>+ ${t('catalogTitle')}</button>
     ${isIos && !standalone && !localStorage.getItem('noir.installnote') && html`<div class="glass card note"><b>${t('installNoteTitle')}</b><p class="dim small">${t('installNote')}</p><button class="link" onClick=${(e) => { try { localStorage.setItem('noir.installnote', '1'); } catch {} e.currentTarget.closest('.note').remove(); }}>${t('gotIt')}</button></div>`}
     <${Widgets}/>
     <h3>${t('activity')}</h3>

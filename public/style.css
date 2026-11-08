@@ -190,3 +190,11 @@ body.sheet-open .tabbar{transform:translateY(140%);opacity:0;pointer-events:none
 
 .file-btn{display:flex;align-items:center;justify-content:center;cursor:pointer}
 .note{padding:14px 16px;display:flex;flex-direction:column;gap:6px}.note p{margin:0}
+
+.coin-row{width:100%;text-align:left;color:inherit;cursor:pointer;font:inherit}
+.skel{pointer-events:none}.sk-c,.sk-l{display:block;background:rgba(255,255,255,.08);border-radius:10px;animation:skp 1.2s ease-in-out infinite}
+.sk-c{width:40px;height:40px;border-radius:50%}.sk-l{height:12px;width:60px;margin:4px 0}.sk-l.s{width:90px;opacity:.6}
+@keyframes skp{50%{opacity:.45}}
+.coin-head{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 0}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:14px;border-radius:20px;text-align:center}.stats div{display:flex;flex-direction:column;gap:2px;min-width:0}.stats b{font-variant-numeric:tabular-nums;font-size:14px;overflow-wrap:anywhere}
+@media (prefers-reduced-motion:reduce){.sk-c,.sk-l{animation:none}}

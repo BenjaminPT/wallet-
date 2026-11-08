@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { html, Icon, Coin, Screen, Btn, Sheet, fmtFiat, fmtNum, short, pct, copyText, haptic } from './common.js';
+import { html, Icon, Coin, Screen, Btn, Sheet, Chart, fmtFiat, fmtNum, short, pct, copyText, haptic } from './common.js';
 import { t } from '../i18n.js';
 import { state, push, pop, assets, balanceOf, priceOf, currentKeys, toast, setSettings, refresh, lock, logout, deleteAccount, hasAccounts, resetTo, addrFor } from '../store.js';
 import { netOf, assetId, tag, label } from '../core/assets.js';
 import { explorerTx } from '../core/chains.js';
-import { lifiQuote, lifiExecute, jupQuote, jupExecute, lidoStake, lidoApr, getMarket, getIconMap } from '../core/market.js';
+import { lifiQuote, lifiExecute, jupQuote, jupExecute, lidoStake, lidoApr, getMarket, getIconMap, marketCache, getSymChart, getTicker } from '../core/market.js';
 import { Avatar } from './accounts.js';
 import { exportBackup } from '../core/accounts.js';
 import { isIos, standalone, saveTextFile } from './common.js';
@@ -131,12 +131,12 @@ export function NftTab() {
 
 // ---------------- РЫНОК ----------------
 export function MarketTab() {
-  const [rows, setRows] = useState(null), [q, setQ] = useState('');
+  const [rows, setRows] = useState(() => marketCache(state.s.fiat)), [q, setQ] = useState('');
   const prev = useRef({});
   const [flash, setFlash] = useState({}), [icons, setIcons] = useState({});
   useEffect(() => { getIconMap().then(setIcons); }, []);
   useEffect(() => {
-    let off = false;
+    let off = false, timer;
     const load = async () => {
       try {
         const d = await getMarket(state.s.fiat);
@@ -145,15 +145,38 @@ export function MarketTab() {
         for (const r of d) { const o = prev.current[r.symbol]; if (o !== undefined && o !== r.current_price) fl[r.symbol] = r.current_price > o ? 'up' : 'down'; prev.current[r.symbol] = r.current_price; }
         setFlash(fl); setRows(d);
       } catch { if (!off) setRows((x) => x || []); }
+      if (!off) timer = setTimeout(load, 8000 + Math.random() * 4000); // каждые 8–12 секунд
     };
+    const tick = () => { clearTimeout(timer); if (!document.hidden) load(); else timer = setTimeout(tick, 2000); };
     load();
-    const iv = setInterval(() => { if (!document.hidden) load(); }, 8000);
-    return () => { off = true; clearInterval(iv); };
-  }, [state.s.mode, state.s.fiat]);
+    document.addEventListener('visibilitychange', tick);
+    return () => { off = true; clearTimeout(timer); document.removeEventListener('visibilitychange', tick); };
+  }, [state.s.fiat]);
   const f = (rows || []).filter((r) => (r.name + r.symbol).toLowerCase().includes(q.toLowerCase()));
   return html`<div class="tab"><h2>${t('marketTitle')}<span class="live"><i/>LIVE</span></h2>
     <input class="field glass" placeholder=${t('search')} value=${q} onInput=${(e) => setQ(e.target.value)}/>
-    <div class="list">${f.map((r) => html`<div class="row glass" key=${r.symbol}><${Coin} a=${{ sym: r.symbol.toUpperCase(), color: '#444', img: icons[r.symbol.toUpperCase()] || r.image }}/><div class="grow-l"><b>${r.symbol.toUpperCase()}</b><span class="dim">${r.name}</span></div><div class="right"><b class=${flash[r.symbol] ? `flash-${flash[r.symbol]}` : ''} key=${r.current_price}>${fmtFiat(r.current_price, r.current_price < 1 ? 4 : 2)}</b><span class=${r.price_change_percentage_24h >= 0 ? 'up' : 'down'}>${pct(r.price_change_percentage_24h)}</span></div></div>`)}</div><div style="height:110px"/></div>`;
+    <div class="list">${rows === null && Array.from({ length: 12 }, (_, i) => html`<div class="row glass skel" key=${i}><i class="sk-c"/><div class="grow-l"><i class="sk-l"/><i class="sk-l s"/></div></div>`)}
+    ${f.map((r) => { const img = icons[r.symbol.toUpperCase()] || r.image; return html`<button class="row glass coin-row" key=${r.symbol} onClick=${() => { haptic(); push('coin', { sym: r.symbol, name: r.name, img, price: r.current_price, ch: r.price_change_percentage_24h }); }}><${Coin} a=${{ sym: r.symbol.toUpperCase(), color: '#444', img }}/><div class="grow-l"><b>${r.symbol.toUpperCase()}</b><span class="dim">${r.name}</span></div><div class="right"><b class=${flash[r.symbol] ? `flash-${flash[r.symbol]}` : ''} key=${r.current_price}>${fmtFiat(r.current_price, r.current_price < 1 ? 4 : 2)}</b><span class=${r.price_change_percentage_24h >= 0 ? 'up' : 'down'}>${pct(r.price_change_percentage_24h)}</span></div></button>`; })}</div><div style="height:110px"/></div>`;
+}
+
+const CP = [['1D', 1], ['7D', 7], ['30D', 30], ['90D', 90], ['1Y', 365]];
+export function CoinPage({ sym, name, img, price, ch }) {
+  const [days, setDays] = useState(1), [data, setData] = useState(null), [tk, setTk] = useState(null), [cur, setCur] = useState(null);
+  useEffect(() => { let off = false; setData(null); getSymChart(sym, days, state.s.fiat).then((d) => !off && setData(d)).catch(() => !off && setData([])); return () => { off = true; }; }, [sym, days]);
+  useEffect(() => {
+    let off = false, timer;
+    const load = () => getTicker(sym, state.s.fiat).then((x) => !off && setTk(x)).catch(() => {}).finally(() => { if (!off) timer = setTimeout(load, 8000 + Math.random() * 4000); });
+    load(); return () => { off = true; clearTimeout(timer); };
+  }, [sym]);
+  const p = tk?.price ?? price, d = (data?.length ?? 0) > 1 ? ((data[data.length - 1][1] / data[0][1]) - 1) * 100 : (tk?.ch ?? ch);
+  const up = d >= 0, dec = p < 1 ? 4 : 2;
+  return html`<${Screen} title=${sym}>
+    <div class="center coin-head"><${Coin} a=${{ sym, color: '#444', img }} s=${52}/><div class="dim">${name}</div>
+      <div class="big">${fmtFiat(cur?.[1] ?? p, dec)}</div><div class=${up ? 'up' : 'down'}>${pct(d)} · ${CP.find((x) => x[1] === days)[0]}</div></div>
+    <${Chart} data=${data} up=${up} onCursor=${setCur}/>
+    <div class="chips">${CP.map(([k, v]) => html`<button class=${days === v ? 'chip on' : 'chip'} onClick=${() => { haptic(6); setDays(v); }}>${k}</button>`)}</div>
+    ${tk && html`<div class="stats glass"><div><span class="dim small">${t('high24')}</span><b>${fmtFiat(tk.high, dec)}</b></div><div><span class="dim small">${t('low24')}</span><b>${fmtFiat(tk.low, dec)}</b></div><div><span class="dim small">${t('vol24')}</span><b>${fmtFiat(tk.vol, 0)}</b></div></div>`}
+  <//>`;
 }
 
 // ---------------- НАСТРОЙКИ ----------------
@@ -215,6 +238,7 @@ export function SettingsTab() {
 
     <${Group} title=${t('secData')}>
       <${SRow} ic="user" label=${t('addrBook')} right=${html`<span class="dim">${s.book.length}</span>`} onClick=${() => setSheet('book')}/>
+      <${SRow} ic="plus" label=${t('catalogTitle')} hint=${t('catalogHint')} onClick=${() => push('catalog')}/>
       <${SRow} ic="plus" label=${t('customTokens')} right=${html`<span class="dim">${s.custom.length}</span>`} onClick=${() => setSheet('token')}/>
       <${SRow} ic="nft" label=${t('alchemyKey')} right=${html`<span class="dim">${s.alchemy ? '••••' : ''}</span>`} onClick=${() => setSheet('alchemy')}/>
     <//>

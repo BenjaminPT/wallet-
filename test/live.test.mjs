@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { getPrices, getChart, getMarket, getIconMap, lifiQuote, jupQuote, lidoApr, jupGuard, SOL_MINT } from '../src/core/market.js';
+import { getPrices, getChart, getMarket, getIconMap, loadCatalog, searchCatalog, getSymChart, getTicker, lifiQuote, jupQuote, lidoApr, jupGuard, SOL_MINT } from '../src/core/market.js';
 import { getBalance, getEvmHistory, getHistory, estimateFee, evmProvider, validateAddress } from '../src/core/chains.js';
 import { assetList, NETS } from '../src/core/assets.js';
 import { verifyTronTx, verifyLifiEvm, LIFI_DIAMOND, LIFI_TRON } from '../src/core/guard.js';
@@ -115,4 +115,16 @@ test('Jupiter: котировка, сборка транзакции и симу
   const progs = [...new Set(tx.message.compiledInstructions.map((i) => tx.message.staticAccountKeys[i.programIdIndex].toBase58()))];
   console.log('Jupiter programs:', progs.join(','));
   await jupGuard(new Connection(NETS.sol.rpc, 'confirmed'), tx, new PublicKey(SOL_ADDR), 100_000_000);
+});
+
+test('каталог токенов: USDC/USDT находятся, у токенов есть адрес и цена', async () => {
+  const all = await loadCatalog();
+  console.log(`::notice title=catalog::токенов ${all.length}`);
+  assert.ok(all.length > 500, `токенов: ${all.length}`);
+  const nets = new Set(all.map((x) => x.net)); assert.ok(nets.size >= 6, [...nets].join());
+  assert.ok(searchCatalog(all, 'usdc').some((x) => x.net === 'eth' && x.sym === 'USDC'));
+});
+test('график и тикер монеты из «Рынка»', async () => {
+  const c = await getSymChart('BTC', 30, 'usd'); assert.ok(c.length > 100 && c[0][1] > 1000);
+  const k = await getTicker('ETH', 'usd'); assert.ok(k.price > 10 && k.high >= k.low);
 });
