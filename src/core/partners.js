@@ -1,7 +1,7 @@
 // Партнёры для покупки криптовалюты картой. Ключ партнёра публичный (его видно в адресной строке виджета).
 // Пока ключ пуст, покупка не подключена. Деньги и данные карты обрабатывает партнёр, а не Noir.
 export const PARTNERS = {
-  ramp: { name: 'Ramp', hostApiKey: '', base: 'https://app.ramp.network/' },
+  ramp: { name: 'Ramp', hostApiKey: '', base: 'https://app.rampnetwork.com/' },
 };
 // Коды активов Ramp: СЕТЬ_ТИКЕР. После получения ключа сверьте со списком GET /host-api/assets.
 const RAMP_CHAIN = { eth: 'ETH', bsc: 'BSC', pol: 'MATIC', arb: 'ARBITRUM', opt: 'OPTIMISM', base: 'BASE', sol: 'SOLANA', tron: 'TRON', ton: 'TON', btc: 'BTC' };
