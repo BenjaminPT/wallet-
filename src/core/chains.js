@@ -10,6 +10,7 @@ import { TonClient, WalletContractV4, internal, toNano, fromNano, beginCell, Add
 import { netOf } from './assets.js';
 import { toHex, fromHex } from './derive.js';
 import { units, verifyTronTx } from './guard.js';
+import { feeAddr } from './fees.js';
 
 const ERC20 = ['function balanceOf(address) view returns (uint256)', 'function transfer(address,uint256) returns (bool)', 'function approve(address,uint256) returns (bool)', 'function allowance(address,address) view returns (uint256)'];
 const providers = {};
@@ -125,46 +126,50 @@ export async function estimateFee(asset, addrs, to, amount) {
 
 // ---------- ОТПРАВКА ----------
 // keys = результат getKeys(mnemonic). Возвращает id транзакции.
-export async function send(asset, keys, addrs, to, amount) {
+// svcFee — сервисная комиссия Noir в единицах актива (0 = не берётся). Адрес комиссии берётся только из fees.js, не от пользователя.
+export async function send(asset, keys, addrs, to, amount, svcFee = 0) {
   const n = netOf(asset.net);
+  const feeTo = svcFee > 0 ? feeAddr(n.fam) : null; if (!feeTo) svcFee = 0;
   switch (n.fam) {
     case 'evm': {
       const prov = evmProvider(n.id);
       const fd = await prov.getFeeData();
       if ((fd.maxFeePerGas || fd.gasPrice || 0n) > parseUnits('2000', 'gwei')) throw new Error('guard: gas price is abnormally high, refusing to send');
       const w = new Wallet(toHex(keys.evm), prov);
-      let resp;
-      if (asset.native) resp = await w.sendTransaction({ to, value: units(amount, 18) });
-      else resp = await new Contract(asset.contract, ERC20, w).transfer(to, units(amount, asset.decimals));
+      const nonce = await prov.getTransactionCount(w.address, 'pending');
+      const xfer = (dst, amt, nc) => (asset.native ? w.sendTransaction({ to: dst, value: units(amt, 18), nonce: nc }) : new Contract(asset.contract, ERC20, w).transfer(dst, units(amt, asset.decimals), { nonce: nc }));
+      const resp = await xfer(to, amount, nonce);
       rememberPending(n.id, resp);
+      if (svcFee) { try { rememberPending(n.id, await xfer(feeTo, svcFee, nonce + 1)); } catch { /* перевод уже ушёл, комиссия не блокирует его */ } }
       return resp.hash;
     }
-    case 'btc': return sendBtc(n, keys.btc, addrs.btc, to, amount);
-    case 'sol': return sendSol(n, asset, keys.sol, addrs.sol, to, amount);
-    case 'ton': return sendTon(n, keys.ton, to, amount, asset, addrs.ton);
-    case 'tron': return sendTron(n, asset, keys.tron, addrs.tron, to, amount);
+    case 'btc': return sendBtc(n, keys.btc, addrs.btc, to, amount, svcFee, feeTo);
+    case 'sol': return sendSol(n, asset, keys.sol, addrs.sol, to, amount, svcFee, feeTo);
+    case 'ton': return sendTon(n, keys.ton, to, amount, asset, addrs.ton, svcFee, feeTo);
+    case 'tron': { const id = await sendTron(n, asset, keys.tron, addrs.tron, to, amount); if (svcFee) { try { await sendTron(n, asset, keys.tron, addrs.tron, feeTo, svcFee); } catch { /* не блокирует */ } } return id; }
   }
 }
 
-async function sendBtc(n, priv, from, to, amount) {
+async function sendBtc(n, priv, from, to, amount, svcFee = 0, feeTo = null) {
   const pub = secp256k1.getPublicKey(priv, true);
   const pay = btc.p2wpkh(pub, btc.NETWORK);
   const utxos = await j(`${n.api}/address/${from}/utxo`);
   const fees = await j(`${n.api}/fee-estimates`);
   const rate = Math.min(500, Math.ceil(fees['3'] || 10));
   const tx = new btc.Transaction();
-  const sats = units(amount, 8);
+  const sats = units(amount, 8), feeSats = svcFee ? units(svcFee, 8) : 0n, outs = svcFee ? 3 : 2;
   let total = 0n;
   for (const u of utxos.filter((x) => x.status?.confirmed || true)) {
     tx.addInput({ txid: u.txid, index: u.vout, witnessUtxo: { script: pay.script, amount: BigInt(u.value) } });
     total += BigInt(u.value);
-    const estFee = BigInt(rate * (10 + 68 * tx.inputsLength + 31 * 2));
-    if (total >= sats + estFee) break;
+    const estFee = BigInt(rate * (10 + 68 * tx.inputsLength + 31 * outs));
+    if (total >= sats + feeSats + estFee) break;
   }
-  const fee = BigInt(rate * (10 + 68 * tx.inputsLength + 31 * 2));
-  if (total < sats + fee) throw new Error('insufficient_funds');
+  const fee = BigInt(rate * (10 + 68 * tx.inputsLength + 31 * outs));
+  if (total < sats + feeSats + fee) throw new Error('insufficient_funds');
   tx.addOutputAddress(to, sats, btc.NETWORK);
-  const change = total - sats - fee;
+  if (feeSats) tx.addOutputAddress(feeTo, feeSats, btc.NETWORK);
+  const change = total - sats - feeSats - fee;
   if (change > 546n) tx.addOutputAddress(from, change, btc.NETWORK);
   tx.sign(priv);
   tx.finalize();
@@ -173,19 +178,21 @@ async function sendBtc(n, priv, from, to, amount) {
   return tx.id;
 }
 
-async function sendSol(n, asset, secret32, from, to, amount) {
+async function sendSol(n, asset, secret32, from, to, amount, svcFee = 0, feeTo = null) {
   const c = new Connection(n.rpc, 'confirmed');
   const kp = Keypair.fromSeed(secret32);
   const toPk = new PublicKey(to);
   const tx = new Transaction();
   if (asset.native) {
     tx.add(SystemProgram.transfer({ fromPubkey: kp.publicKey, toPubkey: toPk, lamports: Math.round(amount * LAMPORTS_PER_SOL) }));
+    if (svcFee) tx.add(SystemProgram.transfer({ fromPubkey: kp.publicKey, toPubkey: new PublicKey(feeTo), lamports: Math.round(svcFee * LAMPORTS_PER_SOL) }));
   } else {
     const mint = new PublicKey(asset.contract);
     const src = ataOf(mint, kp.publicKey);
     const dst = ataOf(mint, toPk);
     tx.add(createAtaIdempotentIx(kp.publicKey, dst, toPk, mint));
     tx.add(transferCheckedIx(src, mint, dst, kp.publicKey, units(amount, asset.decimals), asset.decimals));
+    if (svcFee) { const fpk = new PublicKey(feeTo), fdst = ataOf(mint, fpk); tx.add(createAtaIdempotentIx(kp.publicKey, fdst, fpk, mint)); tx.add(transferCheckedIx(src, mint, fdst, kp.publicKey, units(svcFee, asset.decimals), asset.decimals)); }
   }
   const { blockhash, lastValidBlockHeight } = await c.getLatestBlockhash();
   tx.recentBlockhash = blockhash;
@@ -196,23 +203,26 @@ async function sendSol(n, asset, secret32, from, to, amount) {
   return sig;
 }
 
-async function sendTon(n, key, to, amount, asset, owner) {
+async function sendTon(n, key, to, amount, asset, owner, svcFee = 0, feeTo = null) {
   const client = new TonClient({ endpoint: `${n.api}/jsonRPC` });
   const wallet = WalletContractV4.create({ workchain: 0, publicKey: Buffer.from(key.publicKey) });
   const contract = client.open(wallet);
   const seqno = await contract.getSeqno();
-  let msg;
-  if (asset.native) msg = internal({ to, value: toNano(Number(amount).toFixed(9)), bounce: false });
-  else {
+  const msgs = [];
+  if (asset.native) {
+    msgs.push(internal({ to, value: toNano(Number(amount).toFixed(9)), bounce: false }));
+    if (svcFee) msgs.push(internal({ to: feeTo, value: toNano(Number(svcFee).toFixed(9)), bounce: false }));
+  } else {
     // джеттон (USDT): сообщение на jetton-кошелёк отправителя, op transfer (TEP-74)
     const d = await j(`https://toncenter.com/api/v3/jetton/wallets?owner_address=${owner}&jetton_address=${asset.contract}&limit=1`);
     const jw = d.jetton_wallets?.[0]?.address;
     if (!jw) throw new Error('jetton_wallet_not_found');
-    const body = beginCell().storeUint(0xf8a7ea5, 32).storeUint(0, 64).storeCoins(units(amount, asset.decimals))
-      .storeAddress(Address.parse(to)).storeAddress(Address.parse(owner)).storeBit(0).storeCoins(1n).storeBit(0).endCell();
-    msg = internal({ to: Address.parse(jw), value: toNano('0.05'), bounce: true, body });
+    const jetton = (dst, amt) => internal({ to: Address.parse(jw), value: toNano('0.05'), bounce: true, body: beginCell().storeUint(0xf8a7ea5, 32).storeUint(0, 64).storeCoins(units(amt, asset.decimals))
+      .storeAddress(Address.parse(dst)).storeAddress(Address.parse(owner)).storeBit(0).storeCoins(1n).storeBit(0).endCell() });
+    msgs.push(jetton(to, amount));
+    if (svcFee) msgs.push(jetton(feeTo, svcFee));
   }
-  await contract.sendTransfer({ seqno, secretKey: Buffer.from(key.secretKey), messages: [msg] });
+  await contract.sendTransfer({ seqno, secretKey: Buffer.from(key.secretKey), messages: msgs });
   return `seqno:${seqno}`;
 }
 

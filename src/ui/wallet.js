@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'preact/hooks';
 import { AccountButton, BioOffer } from './accounts.js';
 import { Mark } from './mark.js';
 import { Widgets } from './widgets.js';
+import { serviceFee, feeEnabled, FEE } from '../core/fees.js';
 import { getAccount } from '../core/accounts.js';
 import { html, Icon, Coin, Screen, Btn, Sheet, Chart, Keypad, QR, Scanner, fmtFiat, fmtNum, short, pct, ago, copyText, haptic, isIos, standalone } from './common.js';
 import { t } from '../i18n.js';
@@ -38,6 +39,7 @@ export function Home() {
     <${Chart} data=${data} onCursor=${setCursor}/>
     <div class="chips">${PERIODS.map(([k, d]) => html`<button class=${days === d ? 'chip on' : 'chip'} onClick=${() => { haptic(); setDays(d); }}>${t(k)}</button>`)}</div>
     <div class="actions coach-2">${acts.map(([ic, k, fn]) => html`<button class="act glass" onClick=${fn}><${Icon} n=${ic} s=${22}/><span>${t(k)}</span></button>`)}</div>
+    <button class="link center" onClick=${() => push('buy')}>${t('buyTitle')}</button>
     <h3>${t('assets')}</h3>
     <div class="list">${list.map((a) => html`<button class="row glass" key=${assetId(a)} onClick=${() => push('asset', { id: assetId(a) })}>
       <${Coin} a=${a}/><div class="grow-l"><b>${a.sym}</b><span class="dim">${tag(a)}</span></div>
@@ -115,9 +117,11 @@ export function Send({ id, toAcc }) {
   const nativeFee = a.native ? (fee?.fee || 0) : 0;
   const nat = assets().find((x) => x.net === a.net && x.native);
   const gasOk = a.native || !fee || balanceOf(nat) >= fee.fee;
-  const enough = amount > 0 && amount + nativeFee <= bal + 1e-12;
+  const svc = serviceFee({ fam: n.fam, amount, price, decimals: a.decimals, exempt: !!dest });
+  const enough = amount > 0 && amount + svc + nativeFee <= bal + 1e-12;
   useEffect(() => { if (okAddr && amount > 0) estimateFee(a, state.addrs, to, amount).then(setFee); }, [okAddr, amt]);
-  const fill = (f) => setAmt(String(Math.max(0, f === 1 ? bal - (a.native ? (fee?.fee || 0) * 1.2 : 0) : bal * f)).slice(0, 12));
+  const k = feeEnabled(n.fam) && !dest ? 1 + FEE.sendBps / 10000 : 1; // с учётом комиссии Noir
+  const fill = (f) => setAmt(String(Math.max(0, f === 1 ? (bal - (a.native ? (fee?.fee || 0) * 1.2 : 0)) / k : bal * f / k)).slice(0, 12));
   const handleScan = (txt) => {
     setScan(false);
     // BIP21 / EIP-681: берём адрес получателя, а не адрес токена-контракта
@@ -127,7 +131,7 @@ export function Send({ id, toAcc }) {
   const run = async () => {
     setSt('sending');
     try {
-      { const keys = await currentKeys(); setTx(await sendTx(a, keys, state.addrs, to.trim(), amount)); setTimeout(refresh, 4000); }
+      { const keys = await currentKeys(); setTx(await sendTx(a, keys, state.addrs, to.trim(), amount, svc)); setTimeout(refresh, 4000); }
       setSt('ok'); haptic(20);
     } catch (e) { setSt('err:' + (e.shortMessage || e.message || '')); }
   };
@@ -163,6 +167,7 @@ export function Send({ id, toAcc }) {
         <div class="kv"><span class="dim">${t('to')}</span><b class="mono wrap">${to}</b></div>
         <div class="kv"><span class="dim">${t('network')}</span><b>${n.name}</b></div>
         <div class="kv"><span class="dim">${t('fee')}</span><b>≈ ${fmtNum(fee?.fee ?? 0)} ${fee?.unit || n.sym}</b></div>
+        ${svc > 0 && html`<div class="kv"><span class="dim">${t('svcFee', { p: FEE.sendBps / 100 })}</span><b>${fmtNum(svc)} ${a.sym}</b></div><div class="kv"><span class="dim">${t('totalDebit')}</span><b>${fmtNum(amount + svc)} ${a.sym}</b></div>`}
       </div>
       <div class="warn glass"><${Icon} n="warn"/><span>${t('poison')}</span></div>
       <div class="grow"/><${Btn} onClick=${run}>${t('sendNow')}<//>

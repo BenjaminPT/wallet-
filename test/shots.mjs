@@ -65,6 +65,11 @@ await step('tabs', async () => {
   await p.click('[aria-label="Баланс"]'); await tab(0); await p.waitForSelector('.wd-strip'); await shot('11b-widgets');
   if ((await p.locator('.wd').count()) < 2) throw new Error('виджеты не показались');
 });
+await step('buy', async () => {
+  await p.click('text=Купить криптовалюту'); await p.waitForSelector('.chips'); await shot('11c-buy');
+  if (!(await p.textContent('.screen')).includes('USDT')) throw new Error('экран покупки без USDT');
+  await p.click('.icon-btn.glass');
+});
 await step('unlock', async () => {
   await p.reload(); await p.waitForSelector('input[type=password]'); await shot('12-unlock');
   await p.fill('input[type=password]', 'testpass123'); await p.click('.btn.primary'); await p.waitForSelector('.home .big', { timeout: 15000 });
